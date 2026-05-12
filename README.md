@@ -24,6 +24,8 @@
 email_client/
 │
 ├── main.py                    # 程序入口，启动 GUI 并初始化数据库
+├── test_smtp.py               # 测试smtp
+├── email_project_plan。html   # 计划页面
 ├── config.ini                 # 邮箱服务器与账户配置（本地使用，勿提交 Git）
 ├── README.md                  # 项目说明文档
 ├── .gitignore                 # Git 忽略规则
@@ -149,6 +151,10 @@ python main.py
 - 初始化 `inbox`、`sent_mails`、`accounts` 三张数据表
 - 弹出登录窗口
 
+```bash
+python test_smtp.py
+```
+用于测试smtp模块的发送，但其中的邮箱和授权码改为自己的
 **预期终端输出：**
 
 ```
