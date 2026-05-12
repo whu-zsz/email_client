@@ -1,0 +1,6 @@
+# .gitignore
+data/
+__pycache__/
+*.pyc
+config.ini        # 包含授权码，不提交！
+.vscode/
