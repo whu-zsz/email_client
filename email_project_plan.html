@@ -1,0 +1,270 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.wrap { padding: 1.5rem 0; }
+.phase { margin-bottom: 2rem; }
+.phase-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.phase-badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+.phase-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+.phase-date { font-size: 12px; color: var(--color-text-secondary); margin-left: auto; white-space: nowrap; }
+.tasks { display: flex; flex-direction: column; gap: 6px; }
+.task { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); }
+.task-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.task-body { flex: 1; }
+.task-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 2px; }
+.task-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+.divider { height: 0.5px; background: var(--color-border-tertiary); margin: 0.5rem 0 1.5rem; }
+
+.c-blue-dot  { background: #378ADD; }
+.c-teal-dot  { background: #1D9E75; }
+.c-amber-dot { background: #BA7517; }
+.c-purple-dot{ background: #7F77DD; }
+.c-green-dot { background: #639922; }
+.c-red-dot   { background: #E24B4A; }
+
+.badge-must  { background: #E6F1FB; color: #0C447C; }
+.badge-ui    { background: #EEEDFE; color: #3C3489; }
+.badge-opt   { background: #EAF3DE; color: #3B6D11; }
+.badge-done  { background: #E1F5EE; color: #085041; }
+
+.tag-a    { background: #E6F1FB; color: #185FA5; }
+.tag-b    { background: #EEEDFE; color: #534AB7; }
+.tag-c    { background: #E1F5EE; color: #0F6E56; }
+.tag-d    { background: #FAEEDA; color: #854F0B; }
+.tag-all  { background: #FCEBEB; color: #A32D2D; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.deadline-bar { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+.deadline-icon { font-size: 22px; color: #E24B4A; }
+.deadline-text { font-size: 13px; color: var(--color-text-secondary); }
+.deadline-date { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+</style>
+
+<div class="wrap">
+
+<div class="deadline-bar">
+  <i class="ti ti-calendar-event deadline-icon" aria-hidden="true"></i>
+  <div>
+    <div class="deadline-date">截止日期：2026年6月21日 23:59</div>
+    <div class="deadline-text">距今约 40 天 — 时间充裕，但需稳步推进</div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div>成员A（SMTP）</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7F77DD"></div>成员B（POP3）</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>成员C（GUI）</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#BA7517"></div>成员D（集成）</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>全员</div>
+</div>
+
+<!-- 阶段1 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge badge-done">✓ 已完成</span>
+    <span class="phase-title">第零阶段 — 框架搭建</span>
+    <span class="phase-date">现在</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-red-dot"></div>
+      <div class="task-body">
+        <div class="task-name">项目目录结构 <span class="tag tag-all">全员</span></div>
+        <div class="task-desc">core / gui / db / utils / assets / data 目录已建立，main.py 可正常运行 ✅</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- 阶段2 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge badge-must" style="background:#FEF3CD;color:#7A4F00;">🔨 进行中</span>
+    <span class="phase-title">第一阶段 — 核心协议实现（必须完成）</span>
+    <span class="phase-date">本周 ~ 第2周</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-blue-dot"></div>
+      <div class="task-body">
+        <div class="task-name">SMTP 发送模块 <span class="tag tag-a">成员A</span></div>
+        <div class="task-desc">smtp_client.py 填充完整逻辑，运行 test_smtp.py 三个测试全部通过，能真实发出邮件</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-purple-dot"></div>
+      <div class="task-body">
+        <div class="task-name">POP3 收信模块 <span class="tag tag-b">成员B</span></div>
+        <div class="task-desc">pop3_client.py 实现连接、登录、LIST、RETR、DELE、QUIT，能下载真实邮件</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-purple-dot"></div>
+      <div class="task-body">
+        <div class="task-name">邮件解析模块 <span class="tag tag-b">成员B</span></div>
+        <div class="task-desc">mail_parser.py 解析邮件头（From/To/Subject/Date）、正文、中文编码，返回结构化字典</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-amber-dot"></div>
+      <div class="task-body">
+        <div class="task-name">数据库增删查封装 <span class="tag tag-d">成员D</span></div>
+        <div class="task-desc">database.py 添加 insert_inbox、insert_sent、query_inbox、delete_mail 等方法</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- 阶段3 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge badge-must">🖥 必须完成</span>
+    <span class="phase-title">第二阶段 — GUI 界面完善（必须完成）</span>
+    <span class="phase-date">第2周 ~ 第3周</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-teal-dot"></div>
+      <div class="task-body">
+        <div class="task-name">登录窗口完善 <span class="tag tag-c">成员C</span></div>
+        <div class="task-desc">账号密码输入、服务器下拉选择（QQ/163）、登录按钮调用 SMTPClient + POP3Client 验证</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-teal-dot"></div>
+      <div class="task-body">
+        <div class="task-name">主窗口完善 <span class="tag tag-c">成员C</span></div>
+        <div class="task-desc">三栏布局，收件箱列表从数据库加载，点击邮件右栏显示正文，顶部工具栏含收信、写信、删除按钮</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-teal-dot"></div>
+      <div class="task-body">
+        <div class="task-name">写信窗口完善 <span class="tag tag-c">成员C</span></div>
+        <div class="task-desc">收件人、主题、正文输入框，附件上传按钮，发送按钮调用 SMTPClient.send()</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-amber-dot"></div>
+      <div class="task-body">
+        <div class="task-name">模块联调 <span class="tag tag-d">成员D</span></div>
+        <div class="task-desc">GUI ↔ SMTP ↔ POP3 ↔ 数据库打通，发送/收信结果写入数据库并刷新界面</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- 阶段4 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge badge-must">✅ 基本要求</span>
+    <span class="phase-title">第三阶段 — 功能验收（达到提交标准）</span>
+    <span class="phase-date">第3周末，约6月2日前</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-red-dot"></div>
+      <div class="task-body">
+        <div class="task-name">端到端功能测试 <span class="tag tag-all">全员</span></div>
+        <div class="task-desc">登录 → 收信 → 阅读 → 写信发送 → 删除，完整流程跑通，用真实 QQ 邮箱验证</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-red-dot"></div>
+      <div class="task-body">
+        <div class="task-name">基本错误处理 <span class="tag tag-all">全员</span></div>
+        <div class="task-desc">网络超时、认证失败、发送失败等异常有提示弹窗，不能直接崩溃</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-amber-dot"></div>
+      <div class="task-body">
+        <div class="task-name">开始撰写实验报告 <span class="tag tag-d">成员D</span></div>
+        <div class="task-desc">填写系统架构、协议流程图、分工说明，趁功能新鲜时写，截图留存</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- 阶段5 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge badge-opt">⭐ 优化提升</span>
+    <span class="phase-title">第四阶段 — 优化项（时间允许则做）</span>
+    <span class="phase-date">第4周 ~ 第5周</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-blue-dot"></div>
+      <div class="task-body">
+        <div class="task-name">发送进度提示 <span class="tag tag-a">成员A</span></div>
+        <div class="task-desc">发送大附件时显示进度条，发送在后台线程执行，界面不卡死</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-purple-dot"></div>
+      <div class="task-body">
+        <div class="task-name">增量收信（去重） <span class="tag tag-b">成员B</span></div>
+        <div class="task-desc">对比数据库已有邮件，只下载新邮件，避免重复收取</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-teal-dot"></div>
+      <div class="task-body">
+        <div class="task-name">界面美化 <span class="tag tag-c">成员C</span></div>
+        <div class="task-desc">已读/未读样式区分、邮件搜索框、状态栏动态提示（正在收信…）</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-teal-dot"></div>
+      <div class="task-body">
+        <div class="task-name">附件下载与预览 <span class="tag tag-c">成员C</span></div>
+        <div class="task-desc">收到带附件的邮件时显示附件列表，点击可保存到本地</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-amber-dot"></div>
+      <div class="task-body">
+        <div class="task-name">多账户支持 <span class="tag tag-d">成员D</span></div>
+        <div class="task-desc">accounts 表支持多个邮箱，界面可切换账户</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- 阶段6 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge" style="background:#FCEBEB;color:#A32D2D;">📝 收尾</span>
+    <span class="phase-title">第五阶段 — 报告与提交</span>
+    <span class="phase-date">6月14日 ~ 6月21日</span>
+  </div>
+  <div class="tasks">
+    <div class="task">
+      <div class="task-dot c-amber-dot"></div>
+      <div class="task-body">
+        <div class="task-name">完善实验报告 <span class="tag tag-d">成员D</span></div>
+        <div class="task-desc">填入运行截图、源码说明、每人分工，手写签名扫描贴入第2页</div>
+      </div>
+    </div>
+    <div class="task">
+      <div class="task-dot c-red-dot"></div>
+      <div class="task-body">
+        <div class="task-name">最终提交 <span class="tag tag-all">全员确认</span></div>
+        <div class="task-desc">文件名改为「计网-xx组.docx」，由一名成员发送至指定 QQ 邮箱，截止 6月21日 23:59</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
