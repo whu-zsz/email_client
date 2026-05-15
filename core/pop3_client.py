@@ -32,7 +32,7 @@ class POP3Client:
             if not byte:
                 break
             data += byte
-        resp = data.decode('utf-8', errors='ignore').strip()
+        resp = data.decode('latin-1', errors='replace').rstrip('\r\n')
         logger.debug(f'<<< {resp}')
         return resp
 
@@ -46,7 +46,6 @@ class POP3Client:
             line = self._recv_line()
             if line == '.':
                 break
-            # POP3 规范：以 '.' 开头的行需去掉第一个 '.'（字节填充）
             if line.startswith('..'):
                 line = line[1:]
             lines.append(line)
@@ -120,7 +119,7 @@ class POP3Client:
             raise Exception(f'STAT 失败: {resp}')
         parts = resp.split()
         count = int(parts[1])
-        size  = int(parts[2])
+        size = int(parts[2])
         logger.info(f'[POP3] 共 {count} 封邮件，总大小 {size} 字节')
         return count, size
 
@@ -219,8 +218,7 @@ class POP3Client:
     #  一步完成：连接 → 认证 → 收信 → 断开
     # ------------------------------------------------------------------ #
 
-    def fetch_all(self, username: str, password: str,
-                  max_count: int = 20) -> list:
+    def fetch_all(self, username: str, password: str, max_count: int = 20) -> list:
         """
         对外暴露的简便接口，自动完成完整收信流程。
 
@@ -232,15 +230,6 @@ class POP3Client:
         返回:
             list of dict，每封邮件为一个字典，
             字典结构见 mail_parser.parse_mail() 的返回值
-
-        用法示例:
-            from core.pop3_client import POP3Client
-            from core.mail_parser import parse_mail
-
-            client = POP3Client()
-            mails = client.fetch_all('me@qq.com', '授权码', max_count=10)
-            for m in mails:
-                print(m['subject'], m['from'])
         """
         from core.mail_parser import parse_mail
 
@@ -249,24 +238,21 @@ class POP3Client:
             self.connect()
             self.login(username, password)
 
-            mail_list = self.list_mails()  # {index: size}
+            mail_list = self.list_mails()
             total = len(mail_list)
 
-            # 用 UIDL 获取每封邮件的唯一 ID，用于增量去重
             try:
-                uid_map = self.uidl()  # {index: uid_string}
+                uid_map = self.uidl()
             except Exception:
                 uid_map = {}
 
-            # 查询数据库中已存在的 UID，避免重复下载
             existing_uids = set()
             try:
                 from db.database import get_all_uids
                 existing_uids = get_all_uids()
             except Exception:
-                pass  # 数据库函数不存在时跳过，全量下载
+                pass
 
-            # 取最新的 max_count 封，过滤掉已存在的
             indices = sorted(mail_list.keys(), reverse=True)[:max_count]
             new_indices = [
                 idx for idx in indices
@@ -280,7 +266,7 @@ class POP3Client:
                     raw = self.retrieve_mail(idx)
                     parsed = parse_mail(raw)
                     parsed['_index'] = idx
-                    parsed['_uid']   = uid_map.get(idx, '')
+                    parsed['_uid'] = uid_map.get(idx, '')
                     results.append(parsed)
                 except Exception as e:
                     logger.warning(f'[POP3] 解析邮件 #{idx} 失败: {e}')

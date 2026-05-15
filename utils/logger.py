@@ -2,7 +2,9 @@
 import logging
 import os
 
-LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'app.log')
+LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOG_DIR, 'app.log')
 
 logging.basicConfig(
     level=logging.DEBUG,
