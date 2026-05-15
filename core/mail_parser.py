@@ -32,71 +32,75 @@ def _decode_str(encoded: str) -> str:
     return ''.join(result)
 
 
+def _decode_part(part) -> str:
+    """安全解码一个 MIME part 的 payload，尝试多种编码"""
+    raw_bytes = part.get_payload(decode=True)
+    if raw_bytes is None:
+        return ''
+    charset = part.get_content_charset()
+    for enc in [charset, 'utf-8', 'gbk', 'gb2312', 'latin-1']:
+        if not enc:
+            continue
+        try:
+            return raw_bytes.decode(enc, errors='strict')
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw_bytes.decode('utf-8', errors='replace')
+
+
 def _get_body(msg) -> str:
     """
     从邮件对象中提取纯文本正文
-    优先取 text/plain，若无则从 text/html 中剥离标签
+    优先取 text/plain，备用 text/html，再备用任意可读 part
+    兼容 QQ 系统通知、嵌套 multipart/alternative 等特殊格式
     """
-    body = ''
+    plain_body = ''
+    html_body  = ''
 
-    if msg.is_multipart():
-        # 多部分邮件（含附件或 HTML）
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            disposition  = str(part.get('Content-Disposition', ''))
+    for part in msg.walk():
+        content_type = part.get_content_type()
+        disposition  = str(part.get('Content-Disposition', ''))
 
-            # 跳过附件部分
-            if 'attachment' in disposition:
-                continue
+        if 'attachment' in disposition:
+            continue
+        if content_type.startswith('multipart/'):
+            continue
 
-            if content_type == 'text/plain':
-                charset = part.get_content_charset() or 'utf-8'
-                try:
-                    body = part.get_payload(decode=True).decode(
-                        charset, errors='replace'
-                    )
-                except Exception:
-                    body = part.get_payload(decode=True).decode(
-                        'utf-8', errors='replace'
-                    )
-                break  # 找到纯文本就停止
+        if content_type == 'text/plain' and not plain_body:
+            plain_body = _decode_part(part)
+        elif content_type == 'text/html' and not html_body:
+            html_body = _strip_html(_decode_part(part))
 
-            elif content_type == 'text/html' and not body:
-                # 备用：HTML 正文，简单去除标签
-                charset = part.get_content_charset() or 'utf-8'
-                try:
-                    html = part.get_payload(decode=True).decode(
-                        charset, errors='replace'
-                    )
-                except Exception:
-                    html = part.get_payload(decode=True).decode(
-                        'utf-8', errors='replace'
-                    )
-                body = _strip_html(html)
-    else:
-        # 单部分邮件
-        charset = msg.get_content_charset() or 'utf-8'
-        try:
-            body = msg.get_payload(decode=True).decode(
-                charset, errors='replace'
-            )
-        except Exception:
-            body = str(msg.get_payload())
+    body = plain_body or html_body
+
+    # 最终兜底：非 multipart 且上面都没取到时
+    if not body and not msg.is_multipart():
+        payload = msg.get_payload(decode=True)
+        if payload:
+            body = payload.decode('utf-8', errors='replace')
+        else:
+            raw = msg.get_payload()
+            if isinstance(raw, str):
+                body = raw
 
     return body.strip()
 
 
 def _strip_html(html: str) -> str:
-    """简单去除 HTML 标签，保留文本内容"""
+    """去除 HTML 标签，保留文本内容，并处理 JS 风格 \\uXXXX Unicode 转义"""
     import re
-    # 把 <br>、<p>、<div> 换成换行
+    # 把 <br>、<p>、<div>、<tr> 换成换行
     html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
-    html = re.sub(r'</?(p|div)[^>]*>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?(p|div|tr)[^>]*>', '\n', html, flags=re.IGNORECASE)
     # 去掉其他所有标签
     html = re.sub(r'<[^>]+>', '', html)
+    # 解码 JS 风格的 Unicode 转义（如 QQ 退信模板中的 \\u90ae）
+    html = re.sub(r'\\u([0-9a-fA-F]{4})',
+                  lambda m: chr(int(m.group(1), 16)), html)
     # 合并多余空行
     html = re.sub(r'\n{3,}', '\n\n', html)
     return html.strip()
+
 
 
 def _get_attachments(msg, save_dir: str = None) -> list:
@@ -170,8 +174,35 @@ def parse_mail(raw_data: str, save_attachments_dir: str = None) -> dict:
             'raw'         : '原始字符串（供调试）'
         }
     """
+    # ── 预处理：以 "From:" 为锚点，向上回溯找连续头字段块的起始
+    # 可靠处理 QQ 邮件开头的多行非标准续行、重复内容等情况
+    import re as _re
+    _strict_hdr = _re.compile(r'^[A-Za-z][\w\-]*\s*:\s*\S', _re.ASCII)
+    _lines      = raw_data.split('\n')
+    # 去重：若邮件内容在 raw_data 里出现两次（POP3 bug），只取第一段
+    _boundary_re = _re.compile(r'Content-Type:.*boundary', _re.IGNORECASE)
+    _ct_positions = [i for i, l in enumerate(_lines) if _boundary_re.search(l)]
+    if len(_ct_positions) >= 2:
+        _lines = _lines[:_ct_positions[1]]   # 截掉第二段重复内容
+    # 找第一个 From: 行作为锚点
+    _from_idx = next(
+        (i for i, l in enumerate(_lines) if _re.match(r'^From\s*:', l, _re.IGNORECASE)),
+        None
+    )
+    if _from_idx is not None and _from_idx > 0:
+        _j = _from_idx
+        while _j > 0:
+            _prev = _lines[_j - 1]
+            if _strict_hdr.match(_prev) or _re.match(r'^\s+\S', _prev):
+                _j -= 1
+            else:
+                break
+        cleaned_data = '\n'.join(_lines[_j:])
+    else:
+        cleaned_data = '\n'.join(_lines)
+
     try:
-        msg = email.message_from_string(raw_data)
+        msg = email.message_from_string(cleaned_data)
     except Exception as e:
         logger.error(f'[Parser] 邮件解析失败: {e}')
         return {

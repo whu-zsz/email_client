@@ -341,25 +341,40 @@ class MainWindow:
         if not mail:
             return
 
-        # 标记已读
-        self.mail_tree.item(mail_id, tags=('read',))
-        try:
-            from db.database import mark_as_read
-            mark_as_read(int(mail_id))
-        except Exception:
-            pass
+        # 标记已读（仅收件箱）
+        if self.current_folder == 'inbox':
+            self.mail_tree.item(mail_id, tags=('read',))
+            try:
+                from db.database import mark_as_read
+                mark_as_read(int(mail_id))
+            except Exception:
+                pass
 
-        # 显示邮件内容
+        # 显示邮件头部信息
         self.lbl_subject.config(text=mail.get('subject', '（无主题）') or '（无主题）')
-        self.lbl_from.config(
-            text=f'发件人：{mail.get("from_addr", "") or mail.get("to_addr", "")}')
+        sender = mail.get('from_addr', '') or mail.get('to_addr', '')
+        prefix = '收件人：' if self.current_folder == 'sent' else '发件人：'
+        self.lbl_from.config(text=f'{prefix}{sender}')
         date = mail.get('receive_time') or mail.get('send_time', '')
         self.lbl_date.config(text=f'时间：{date}')
 
+        # ── Bug1 修复：body 为空或疑似原始邮件头时，从 raw_data 重新解析 ──
         body = mail.get('body', '') or ''
+        if not body or body.startswith('Received:') or body.startswith('by '):
+            raw = mail.get('raw_data', '')
+            if raw:
+                try:
+                    from core.mail_parser import parse_mail
+                    parsed = parse_mail(raw)
+                    body = parsed.get('body', '') or ''
+                    # 顺便更新内存中的数据，避免下次重复解析
+                    mail['body'] = body
+                except Exception:
+                    pass
+
         self.body_text.config(state=tk.NORMAL)
         self.body_text.delete('1.0', tk.END)
-        self.body_text.insert(tk.END, body)
+        self.body_text.insert(tk.END, body if body else '（正文为空）')
         self.body_text.config(state=tk.DISABLED)
 
         # 附件提示
@@ -391,7 +406,7 @@ class MainWindow:
             mails = client.fetch_all(
                 self.account['email'],
                 self.account['password'],
-                max_count=20
+                max_count=5
             )
             new_count = 0
             for m in mails:
@@ -420,7 +435,8 @@ class MainWindow:
         mail_id = int(selected[0])
         try:
             from db.database import delete_mail
-            delete_mail(mail_id)
+            # ── Bug2 修复：传入当前文件夹，避免在已发送界面删错表 ──
+            delete_mail(mail_id, folder=self.current_folder)
             self.mail_tree.delete(selected[0])
             self.mails = [m for m in self.mails if m.get('id') != mail_id]
             # 清空右栏

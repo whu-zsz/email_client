@@ -252,19 +252,40 @@ class POP3Client:
             mail_list = self.list_mails()  # {index: size}
             total = len(mail_list)
 
-            # 取最新的 max_count 封（编号最大的在最后）
-            indices = sorted(mail_list.keys(), reverse=True)[:max_count]
+            # 用 UIDL 获取每封邮件的唯一 ID，用于增量去重
+            try:
+                uid_map = self.uidl()  # {index: uid_string}
+            except Exception:
+                uid_map = {}
 
-            for idx in indices:
+            # 查询数据库中已存在的 UID，避免重复下载
+            existing_uids = set()
+            try:
+                from db.database import get_all_uids
+                existing_uids = get_all_uids()
+            except Exception:
+                pass  # 数据库函数不存在时跳过，全量下载
+
+            # 取最新的 max_count 封，过滤掉已存在的
+            indices = sorted(mail_list.keys(), reverse=True)[:max_count]
+            new_indices = [
+                idx for idx in indices
+                if uid_map.get(idx, f'__no_uid_{idx}') not in existing_uids
+            ]
+
+            logger.info(f'[POP3] 服务器共 {total} 封，本次下载 {len(new_indices)} 封新邮件')
+
+            for idx in new_indices:
                 try:
                     raw = self.retrieve_mail(idx)
                     parsed = parse_mail(raw)
-                    parsed['_index'] = idx   # 保留 POP3 编号，删除时用
+                    parsed['_index'] = idx
+                    parsed['_uid']   = uid_map.get(idx, '')
                     results.append(parsed)
                 except Exception as e:
                     logger.warning(f'[POP3] 解析邮件 #{idx} 失败: {e}')
 
-            logger.info(f'[POP3] 共收取 {len(results)}/{total} 封邮件')
+            logger.info(f'[POP3] 共收取 {len(results)} 封新邮件')
         finally:
             self.quit()
 
