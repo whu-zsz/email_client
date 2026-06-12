@@ -46,7 +46,9 @@ def _decode_part(part) -> str:
     if raw_bytes is None:
         return ''
     charset = part.get_content_charset()
-    for enc in [charset, 'utf-8', 'gbk', 'gb2312', 'latin-1']:
+    # gb18030 是 GBK/GB2312 的超集，放在最后能覆盖几乎所有中文编码
+    # 不含 latin-1：它对任意字节都能"成功"但会产生乱码
+    for enc in [charset, 'utf-8', 'gbk', 'gb18030', 'gb2312']:
         if not enc:
             continue
         try:
@@ -135,7 +137,7 @@ def _extract_bodies(msg) -> tuple:
         payload = msg.get_payload(decode=True)
         decoded = ''
         if payload:
-            for enc in ['utf-8', 'gbk', 'gb2312', 'latin-1']:
+            for enc in ['utf-8', 'gbk', 'gb18030', 'gb2312']:
                 try:
                     decoded = payload.decode(enc, errors='strict')
                     break
@@ -225,11 +227,6 @@ def _preprocess_raw_text(raw_text: str) -> str:
         re.IGNORECASE,
     )
     lines = raw_text.replace('\r\n', '\n').split('\n')
-
-    boundary_re = re.compile(r'Content-Type:.*boundary', re.IGNORECASE)
-    ct_positions = [i for i, line in enumerate(lines) if boundary_re.search(line)]
-    if len(ct_positions) >= 2:
-        lines = lines[:ct_positions[1]]
 
     anchor_idx = next((i for i, line in enumerate(lines) if anchor_hdr.match(line)), None)
     if anchor_idx is None or anchor_idx <= 0:
