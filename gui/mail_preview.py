@@ -1,10 +1,14 @@
+import html
 import os
 import re
 import tempfile
 import tkinter as tk
 from tkinter import ttk
 
-from tkinterweb import HtmlFrame
+try:
+    from tkinterweb import HtmlFrame
+except ModuleNotFoundError:
+    HtmlFrame = None
 
 
 class MailPreview:
@@ -17,13 +21,15 @@ class MailPreview:
         self.container = tk.Frame(parent, bg='white')
         self.container.pack(fill=tk.BOTH, expand=True)
 
-        self.html_frame = HtmlFrame(
-            self.container,
-            messages_enabled=False,
-            horizontal_scrollbar=True,
-            vertical_scrollbar=True,
-            textwrap=False,
-        )
+        self.html_frame = None
+        if HtmlFrame is not None:
+            self.html_frame = HtmlFrame(
+                self.container,
+                messages_enabled=False,
+                horizontal_scrollbar=True,
+                vertical_scrollbar=True,
+                textwrap=False,
+            )
         self.text_frame = tk.Frame(self.container, bg='white')
         self.text_widget = tk.Text(
             self.text_frame,
@@ -49,7 +55,8 @@ class MailPreview:
 
     def show_text(self, text: str):
         self.current_mode = 'text'
-        self.html_frame.pack_forget()
+        if self.html_frame is not None:
+            self.html_frame.pack_forget()
         self.text_frame.pack(fill=tk.BOTH, expand=True)
         self.text_widget.config(state=tk.NORMAL)
         self.text_widget.delete('1.0', tk.END)
@@ -59,6 +66,10 @@ class MailPreview:
     def show_html(self, html: str, mail_id: int, parts: list):
         if not html:
             self.show_text('（正文为空）')
+            return
+
+        if self.html_frame is None:
+            self.show_text(self._html_to_text(html))
             return
 
         self.current_mode = 'html'
@@ -180,9 +191,12 @@ class MailPreview:
         return f'<html tkinterweb-overflow-x="auto"><body>{base_style}<div class="mail-shell">{html}</div></body></html>'
 
     @staticmethod
-    def _html_to_text(html: str) -> str:
-        text = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    def _html_to_text(html_text: str) -> str:
+        text = re.sub(r'<style[\s\S]*?</style>', '', html_text, flags=re.IGNORECASE)
+        text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
         text = re.sub(r'</?(p|div|li|tr|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
         text = re.sub(r'<[^>]+>', '', text)
+        text = html.unescape(text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip() or '（正文为空）'

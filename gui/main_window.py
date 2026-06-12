@@ -142,7 +142,6 @@ class MainWindow:
         search_frame = tk.Frame(mid, bg='white')
         search_frame.pack(fill=tk.X, padx=10, pady=6)
         self.search_var = tk.StringVar()
-        self.search_var.trace('w', self._on_search)
         search_entry = tk.Entry(
             search_frame,
             textvariable=self.search_var,
@@ -176,6 +175,7 @@ class MainWindow:
 
         self.mail_tree.bind('<<TreeviewSelect>>', self._on_mail_select)
         self.mail_tree.bind('<Double-1>', self._on_mail_select)
+        self.search_var.trace('w', self._on_search)
 
     def _build_right(self, parent):
         """右栏：邮件正文预览"""
@@ -277,9 +277,12 @@ class MainWindow:
         body = mail.get('text_body', '') or mail.get('body', '') or ''
         parts = get_mail_parts(int(mail.get('id', 0))) if mail.get('id') else []
 
+        raw_source = mail.get('raw_eml') or mail.get('raw_data')
         needs_reparse = (
-            not html_body and bool(mail.get('raw_data'))
-        ) or (not body and bool(mail.get('raw_data'))) or (not parts and bool(mail.get('raw_data')))
+            (not html_body and bool(raw_source))
+            or (not body and bool(raw_source))
+            or (not parts and bool(raw_source))
+        )
 
         if not needs_reparse:
             mail['parts'] = parts
@@ -289,7 +292,7 @@ class MainWindow:
         try:
             from core.mail_parser import parse_mail
 
-            parsed = parse_mail(mail.get('raw_data', ''))
+            parsed = parse_mail(mail.get('raw_eml') or mail.get('raw_data', ''))
             body = parsed.get('text_body', '') or parsed.get('body', '')
             html_body = parsed.get('html_body', '')
             mail['body'] = body

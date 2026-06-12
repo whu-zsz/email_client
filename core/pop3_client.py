@@ -24,32 +24,54 @@ class POP3Client:
         self.sock.sendall(raw)
         logger.debug(f'>>> {cmd}')
 
-    def _recv_line(self) -> str:
-        """接收服务器一行响应（以 CRLF 结尾）"""
+    def _recv_line_bytes(self) -> bytes:
+        """接收服务器一行原始响应（以 CRLF 结尾）"""
         data = b''
         while not data.endswith(b'\r\n'):
             byte = self.sock.recv(1)
             if not byte:
                 break
             data += byte
+        return data
+
+    def _recv_line(self) -> str:
+        """接收服务器一行响应（以 CRLF 结尾）"""
+        data = self._recv_line_bytes()
         resp = data.decode('latin-1', errors='replace').rstrip('\r\n')
         logger.debug(f'<<< {resp}')
         return resp
 
     def _recv_multiline(self) -> str:
         """
-        接收多行响应，直到遇到单独一行 '.'
-        用于 LIST、RETR 等返回多行数据的命令
+        接收多行文本响应，直到遇到单独一行 '.'
+        用于 LIST、UIDL 等返回多行文本数据的命令
         """
         lines = []
         while True:
-            line = self._recv_line()
-            if line == '.':
+            raw_line = self._recv_line_bytes()
+            line = raw_line.rstrip(b'\r\n')
+            if line == b'.':
                 break
-            if line.startswith('..'):
+            if line.startswith(b'..'):
+                line = line[1:]
+            lines.append(line.decode('latin-1', errors='replace'))
+        return '\r\n'.join(lines)
+
+    def _recv_multiline_bytes(self) -> bytes:
+        """
+        接收多行原始字节响应，直到遇到单独一行 '.'
+        用于 RETR、TOP 等返回整封邮件内容的命令
+        """
+        lines = []
+        while True:
+            raw_line = self._recv_line_bytes()
+            line = raw_line.rstrip(b'\r\n')
+            if line == b'.':
+                break
+            if line.startswith(b'..'):
                 line = line[1:]
             lines.append(line)
-        return '\r\n'.join(lines)
+        return b'\r\n'.join(lines)
 
     # ------------------------------------------------------------------ #
     #  连接与断开
@@ -168,20 +190,20 @@ class POP3Client:
     #  下载邮件
     # ------------------------------------------------------------------ #
 
-    def retrieve_mail(self, index: int) -> str:
+    def retrieve_mail(self, index: int) -> bytes:
         """
         RETR 命令：下载第 index 封邮件的完整原始内容
-        返回符合 RFC 2822 格式的原始邮件字符串
+        返回符合 RFC 2822 格式的原始邮件字节
         """
         self._send(f'RETR {index}')
         resp = self._recv_line()
         if not resp.startswith('+OK'):
             raise Exception(f'RETR {index} 失败: {resp}')
-        raw = self._recv_multiline()
+        raw = self._recv_multiline_bytes()
         logger.info(f'[POP3] 下载邮件 #{index}，大小 {len(raw)} 字节')
         return raw
 
-    def top(self, index: int, lines: int = 0) -> str:
+    def top(self, index: int, lines: int = 0) -> bytes:
         """
         TOP 命令：只下载邮件头部（不下载正文），速度更快
         lines=0 表示只要头部，lines=N 表示头部+前N行正文
@@ -191,7 +213,9 @@ class POP3Client:
         resp = self._recv_line()
         if not resp.startswith('+OK'):
             raise Exception(f'TOP {index} 失败: {resp}')
-        return self._recv_multiline()
+        raw = self._recv_multiline_bytes()
+        logger.info(f'[POP3] 下载邮件头 #{index}，大小 {len(raw)} 字节')
+        return raw
 
     # ------------------------------------------------------------------ #
     #  删除邮件

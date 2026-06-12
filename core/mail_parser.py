@@ -12,9 +12,38 @@ from email.utils import parseaddr, parsedate_to_datetime
 
 from utils.logger import logger
 
-
 INLINE_DISPOSITION = 'inline'
 ATTACHMENT_DISPOSITION = 'attachment'
+CHARSET_FALLBACKS = ('utf-8', 'gb18030', 'gbk', 'gb2312', 'big5', 'latin-1')
+
+
+def _decode_bytes(data: bytes, charsets) -> str:
+    """按候选编码列表解码字节，最后使用替换策略兜底"""
+    if data is None:
+        return ''
+
+    candidates = []
+    for charset in charsets:
+        if charset and charset not in candidates:
+            candidates.append(charset)
+    for charset in CHARSET_FALLBACKS:
+        if charset not in candidates:
+            candidates.append(charset)
+
+    for charset in candidates:
+        try:
+            return data.decode(charset, errors='strict')
+        except (LookupError, UnicodeDecodeError):
+            continue
+
+    for charset in candidates:
+        try:
+            return data.decode(charset, errors='replace')
+        except LookupError:
+            continue
+
+    return data.decode('utf-8', errors='replace')
+
 
 
 def _decode_str(encoded: str) -> str:
@@ -29,11 +58,7 @@ def _decode_str(encoded: str) -> str:
     result = []
     for part, charset in parts:
         if isinstance(part, bytes):
-            charset = charset or 'utf-8'
-            try:
-                result.append(part.decode(charset, errors='replace'))
-            except (LookupError, UnicodeDecodeError):
-                result.append(part.decode('utf-8', errors='replace'))
+            result.append(_decode_bytes(part, [charset]))
         else:
             result.append(part)
     return ''.join(result)
@@ -46,23 +71,16 @@ def _decode_part(part) -> str:
     if raw_bytes is None:
         return ''
     charset = part.get_content_charset()
-    for enc in [charset, 'utf-8', 'gbk', 'gb2312', 'latin-1']:
-        if not enc:
-            continue
-        try:
-            return raw_bytes.decode(enc, errors='strict')
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return raw_bytes.decode('utf-8', errors='replace')
+    return _decode_bytes(raw_bytes, [charset])
 
 
 
 def _strip_html(html: str) -> str:
     """去除 HTML 标签，保留文本内容，并处理 JS 风格 \\uXXXX Unicode 转义"""
-    html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
-    html = re.sub(r'</?(p|div|tr|li|ul|ol|table|tbody|thead|h[1-6])[^>]*>', '\n', html, flags=re.IGNORECASE)
     html = re.sub(r'<style[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
     html = re.sub(r'<script[\s\S]*?</script>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?(p|div|tr|li|ul|ol|table|tbody|thead|h[1-6])[^>]*>', '\n', html, flags=re.IGNORECASE)
     html = re.sub(r'<[^>]+>', '', html)
     html = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), html)
     html = re.sub(r'\n{3,}', '\n\n', html)
@@ -135,14 +153,7 @@ def _extract_bodies(msg) -> tuple:
         payload = msg.get_payload(decode=True)
         decoded = ''
         if payload:
-            for enc in ['utf-8', 'gbk', 'gb2312', 'latin-1']:
-                try:
-                    decoded = payload.decode(enc, errors='strict')
-                    break
-                except UnicodeDecodeError:
-                    continue
-            if not decoded:
-                decoded = payload.decode('utf-8', errors='replace')
+            decoded = _decode_bytes(payload, [msg.get_content_charset()])
         else:
             raw = msg.get_payload()
             if isinstance(raw, str):
@@ -218,47 +229,154 @@ def _extract_parts(msg, save_dir: str = None) -> tuple:
 
 
 def _preprocess_raw_text(raw_text: str) -> str:
-    """清理前导噪声并兼容折叠头字段"""
-    strict_hdr = re.compile(r'^[A-Za-z][\w\-]*\s*:.*$', re.ASCII)
-    anchor_hdr = re.compile(
-        r'^(From|To|Subject|Date|MIME-Version|Content-Type|Content-Transfer-Encoding|Message-ID|Return-Path)\s*:',
+    """清理前导噪声并兼容折叠头字段，仅在 fallback 场景使用"""
+    primary_hdr = re.compile(
+        r'^(Content-Type|MIME-Version|From|To|Subject|Date|Content-Transfer-Encoding)\s*:',
         re.IGNORECASE,
     )
+    generic_hdr = re.compile(r'^[A-Za-z][\w\-]*\s*:\s*.*$', re.ASCII)
     lines = raw_text.replace('\r\n', '\n').split('\n')
 
-    boundary_re = re.compile(r'Content-Type:.*boundary', re.IGNORECASE)
-    ct_positions = [i for i, line in enumerate(lines) if boundary_re.search(line)]
-    if len(ct_positions) >= 2:
-        lines = lines[:ct_positions[1]]
+    def is_continuation_candidate(prev_line: str, line: str) -> bool:
+        stripped = line.strip()
+        if not stripped:
+            return False
+        if generic_hdr.match(line):
+            return False
+        if stripped.startswith('=?'):
+            return True
+        if stripped.startswith(('boundary=', 'charset=', 'name=', 'filename=')):
+            return True
+        if prev_line.rstrip().endswith(';'):
+            return True
+        return False
 
-    anchor_idx = next((i for i, line in enumerate(lines) if anchor_hdr.match(line)), None)
-    if anchor_idx is None or anchor_idx <= 0:
+    best_idx = None
+    best_score = -1
+
+    for idx, line in enumerate(lines):
+        if not primary_hdr.match(line):
+            continue
+
+        header_count = 0
+        blank_found = False
+        jammed_headers = False
+        normalized_block = []
+        prev_header_line = ''
+
+        for follow in lines[idx:idx + 40]:
+            if not follow.strip():
+                blank_found = True
+                break
+
+            if re.match(r'^\s+', follow):
+                normalized_block.append(follow)
+                continue
+
+            if generic_hdr.match(follow):
+                if len(re.findall(r'[A-Za-z][\w\-]*\s*:', follow)) >= 2:
+                    jammed_headers = True
+                    break
+                normalized_block.append(follow)
+                prev_header_line = follow
+                header_count += 1
+                continue
+
+            if prev_header_line and is_continuation_candidate(prev_header_line, follow):
+                normalized_block.append(' ' + follow.lstrip())
+                continue
+
+            break
+
+        if not blank_found or header_count < 4 or jammed_headers:
+            continue
+
+        score = header_count
+        if re.match(r'^(From|To|Subject)\s*:', line, re.IGNORECASE):
+            score += 2
+        if any(re.match(r'^Content-Type\s*:\s*multipart/', item, re.IGNORECASE) for item in normalized_block):
+            score += 1
+
+        if score > best_score:
+            best_idx = idx
+            best_score = score
+
+    if best_idx is None:
         return '\n'.join(lines)
 
-    start = anchor_idx
-    while start > 0:
-        prev = lines[start - 1]
-        if strict_hdr.match(prev) or re.match(r'^\s+', prev):
-            start -= 1
+    normalized_lines = lines[:]
+    in_headers = True
+    prev_header_line = ''
+    for pos in range(best_idx, len(normalized_lines)):
+        current = normalized_lines[pos]
+        if not current.strip():
+            in_headers = True
+            prev_header_line = ''
             continue
-        break
-    return '\n'.join(lines[start:])
+        if re.match(r'^--', current):
+            in_headers = True
+            prev_header_line = ''
+            continue
+        if not in_headers:
+            continue
+        if re.match(r'^\s+', current):
+            continue
+        if generic_hdr.match(current):
+            prev_header_line = current
+            continue
+        if prev_header_line and is_continuation_candidate(prev_header_line, current):
+            normalized_lines[pos] = ' ' + current.lstrip()
+            continue
+        in_headers = False
+
+    cleaned = '\n'.join(normalized_lines[best_idx:])
+    if '\n\n' not in cleaned:
+        cleaned = cleaned.replace('\n--', '\n\n--', 1)
+    return cleaned
 
 
 
 def _coerce_raw(raw_data) -> tuple:
-    """统一原始邮件的文本与字节表示"""
+    """统一原始邮件的字节与调试文本表示，优先保留原始字节"""
     if isinstance(raw_data, bytes):
         raw_bytes = raw_data
-        raw_text = raw_bytes.decode('latin-1', errors='replace')
-        return raw_text, raw_bytes
+    else:
+        raw_text = raw_data or ''
+        try:
+            raw_bytes = raw_text.encode('latin-1', errors='strict')
+        except UnicodeEncodeError:
+            raw_bytes = raw_text.encode('utf-8', errors='replace')
+    raw_text = raw_bytes.decode('latin-1', errors='replace')
+    return raw_bytes, raw_text
 
-    raw_text = raw_data or ''
-    try:
-        raw_bytes = raw_text.encode('latin-1', errors='replace')
-    except Exception:
-        raw_bytes = raw_text.encode('utf-8', errors='replace')
-    return raw_text, raw_bytes
+
+
+def _message_looks_broken(msg, text_body: str, html_body: str) -> bool:
+    """判断解析结果是否明显异常，用于触发 fallback"""
+    preview = (text_body or html_body or '').strip()
+
+    if not msg.get('Subject') and not msg.get('From'):
+        return True
+    if msg.get_content_type() == 'text/plain' and 'multipart/' in preview[:200]:
+        return True
+    if not preview:
+        return False
+
+    suspicious_tokens = ('Content-Type:', 'MIME-Version:', 'Received:', 'Content-Transfer-Encoding:')
+    if any(token in preview[:200] for token in suspicious_tokens):
+        return True
+    return False
+
+
+
+def _parse_message_from_bytes(raw_bytes: bytes, raw_text: str, use_fallback: bool = False):
+    """从字节构建 email.message 对象，必要时对遗留文本进行保守 fallback 预处理"""
+    if use_fallback:
+        cleaned_text = _preprocess_raw_text(raw_text)
+        parse_bytes = cleaned_text.encode('latin-1', errors='replace')
+    else:
+        parse_bytes = raw_bytes
+    return email.message_from_bytes(parse_bytes, policy=policy.default)
 
 
 
@@ -282,28 +400,34 @@ def parse_mail(raw_data, save_attachments_dir: str = None) -> dict:
             'raw_bytes'   : b'原始邮件字节'
         }
     """
-    raw_text, raw_bytes = _coerce_raw(raw_data)
-    cleaned_text = _preprocess_raw_text(raw_text)
-    cleaned_bytes = cleaned_text.encode('latin-1', errors='replace')
+    raw_bytes, raw_text = _coerce_raw(raw_data)
 
     try:
-        msg = email.message_from_bytes(cleaned_bytes, policy=policy.default)
-    except Exception as e:
-        logger.error(f'[Parser] 邮件解析失败: {e}')
-        return {
-            'from': '',
-            'from_addr': '',
-            'to': '',
-            'subject': '（解析失败）',
-            'date': '',
-            'body': raw_text,
-            'text_body': raw_text,
-            'html_body': '',
-            'attachments': [],
-            'inline_parts': [],
-            'raw': raw_text,
-            'raw_bytes': raw_bytes,
-        }
+        msg = _parse_message_from_bytes(raw_bytes, raw_text, use_fallback=False)
+        text_body, html_body = _extract_bodies(msg)
+        if _message_looks_broken(msg, text_body, html_body):
+            msg = _parse_message_from_bytes(raw_bytes, raw_text, use_fallback=True)
+            text_body, html_body = _extract_bodies(msg)
+    except Exception:
+        try:
+            msg = _parse_message_from_bytes(raw_bytes, raw_text, use_fallback=True)
+            text_body, html_body = _extract_bodies(msg)
+        except Exception as e:
+            logger.error(f'[Parser] 邮件解析失败: {e}')
+            return {
+                'from': '',
+                'from_addr': '',
+                'to': '',
+                'subject': '（解析失败）',
+                'date': '',
+                'body': raw_text,
+                'text_body': raw_text,
+                'html_body': '',
+                'attachments': [],
+                'inline_parts': [],
+                'raw': raw_text,
+                'raw_bytes': raw_bytes,
+            }
 
     subject = _decode_str(str(msg.get('Subject', '')))
     from_raw = _decode_str(str(msg.get('From', '')))
@@ -317,7 +441,6 @@ def parse_mail(raw_data, save_attachments_dir: str = None) -> dict:
     except Exception:
         date_str = date_raw
 
-    text_body, html_body = _extract_bodies(msg)
     attachments, inline_parts = _extract_parts(msg, save_dir=save_attachments_dir)
 
     result = {

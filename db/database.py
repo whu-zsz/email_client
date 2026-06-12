@@ -207,7 +207,7 @@ def get_inbox() -> list:
         rows = conn.execute(
             '''
             SELECT id, from_addr, subject, body, text_body, html_body,
-                   receive_time, is_read, raw_data
+                   receive_time, is_read, raw_data, raw_eml
             FROM inbox
             ORDER BY id DESC
             '''
