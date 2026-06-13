@@ -6,6 +6,13 @@ from tkinter import ttk, messagebox, filedialog
 import threading
 import os
 
+from utils.theme import (
+    BG, HEADER, CARD, DIVIDER, TEXT, TEXT_SEC, TEXT_MUTED,
+    ACCENT, ACCENT_HOVER, ERROR, HOVER, HEADER_HOVER,
+    BODY, SMALL, TINY, FAMILY,
+    PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+)
+
 
 class ComposeWindow:
     def __init__(self, parent, account: dict):
@@ -16,7 +23,7 @@ class ComposeWindow:
         self.win.title('写信')
         self.win.geometry('660x540')
         self.win.minsize(520, 420)
-        self.win.configure(bg='#f5f5f0')
+        self.win.configure(bg=BG)
         self.win.grab_set()   # 模态窗口
 
         # 居中
@@ -32,119 +39,125 @@ class ComposeWindow:
     # ------------------------------------------------------------------ #
 
     def _build_ui(self):
-        bg = '#f5f5f0'
-
         # 顶部标题栏
-        header = tk.Frame(self.win, bg='#2c2c2a', height=46)
+        header = tk.Frame(self.win, bg=HEADER, height=46)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         tk.Label(header, text='✏  写信',
-                 font=('Microsoft YaHei', 12, 'bold'),
-                 fg='white', bg='#2c2c2a').pack(side=tk.LEFT, padx=16,
-                                                pady=10)
+                 font=(FAMILY, 12, 'bold'),
+                 fg='white', bg=HEADER).pack(side=tk.LEFT, padx=PAD_LG,
+                                             pady=PAD_MD)
 
-        # 发送按钮（放在顶部右侧）
+        # 发送按钮
         self.send_btn = tk.Button(
             header, text='发  送 ▶',
-            font=('Microsoft YaHei', 10, 'bold'),
-            bg='#1D9E75', fg='white',
-            activebackground='#0F6E56', activeforeground='white',
-            relief='flat', cursor='hand2', padx=16,
+            font=(FAMILY, 10, 'bold'),
+            bg=ACCENT, fg='white',
+            activebackground=ACCENT_HOVER, activeforeground='white',
+            relief='flat', cursor='hand2', padx=PAD_LG,
             command=self._on_send
         )
-        self.send_btn.pack(side=tk.RIGHT, padx=12, pady=8)
+        self.send_btn.pack(side=tk.RIGHT, padx=PAD_MD, pady=PAD_SM)
+        self._bind_hover(self.send_btn, ACCENT, ACCENT_HOVER)
 
-        # 表单区域
-        form = tk.Frame(self.win, bg=bg, padx=20)
-        form.pack(fill=tk.BOTH, expand=True, pady=10)
+        # 表单区域（用 grid 实现自适应）
+        form = tk.Frame(self.win, bg=BG, padx=PAD_XL)
+        form.pack(fill=tk.BOTH, expand=True, pady=PAD_MD)
+
+        form.columnconfigure(1, weight=1)
 
         entry_opts = dict(
-            font=('Microsoft YaHei', 11),
+            font=BODY,
             relief='flat', bd=0,
             highlightthickness=1,
-            highlightbackground='#d3d1c7',
-            highlightcolor='#2c2c2a',
-            bg='white'
+            highlightbackground=DIVIDER,
+            highlightcolor=TEXT,
+            bg='white',
         )
 
         # 发件人（只读显示）
-        row_from = tk.Frame(form, bg=bg)
-        row_from.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(row_from, text='发件人：', width=8, anchor='e',
-                 font=('Microsoft YaHei', 10),
-                 fg='#888780', bg=bg).pack(side=tk.LEFT)
-        tk.Label(row_from, text=self.account['email'],
-                 font=('Microsoft YaHei', 10),
-                 fg='#5f5e5a', bg=bg, anchor='w').pack(side=tk.LEFT)
+        tk.Label(form, text='发件人：', width=8, anchor='e',
+                 font=SMALL,
+                 fg=TEXT_MUTED, bg=BG).grid(row=0, column=0, sticky='e',
+                                             pady=(0, PAD_SM))
+        tk.Label(form, text=self.account['email'],
+                 font=SMALL,
+                 fg=TEXT_SEC, bg=BG, anchor='w').grid(row=0, column=1,
+                                                       sticky='w',
+                                                       pady=(0, PAD_SM))
 
         # 收件人
-        row_to = tk.Frame(form, bg=bg)
-        row_to.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(row_to, text='收件人：', width=8, anchor='e',
-                 font=('Microsoft YaHei', 10),
-                 fg='#888780', bg=bg).pack(side=tk.LEFT)
+        tk.Label(form, text='收件人：', width=8, anchor='e',
+                 font=SMALL,
+                 fg=TEXT_MUTED, bg=BG).grid(row=1, column=0, sticky='e',
+                                             pady=(0, PAD_SM))
         self.to_var = tk.StringVar()
-        tk.Entry(row_to, textvariable=self.to_var,
-                 **entry_opts).pack(side=tk.LEFT, fill=tk.X, expand=True,
-                                    ipady=6)
+        tk.Entry(form, textvariable=self.to_var,
+                 **entry_opts).grid(row=1, column=1, sticky='ew',
+                                    ipady=PAD_SM, pady=(0, PAD_SM))
 
         # 主题
-        row_sub = tk.Frame(form, bg=bg)
-        row_sub.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(row_sub, text='主  题：', width=8, anchor='e',
-                 font=('Microsoft YaHei', 10),
-                 fg='#888780', bg=bg).pack(side=tk.LEFT)
+        tk.Label(form, text='主  题：', width=8, anchor='e',
+                 font=SMALL,
+                 fg=TEXT_MUTED, bg=BG).grid(row=2, column=0, sticky='e',
+                                             pady=(0, PAD_SM))
         self.subject_var = tk.StringVar()
-        tk.Entry(row_sub, textvariable=self.subject_var,
-                 **entry_opts).pack(side=tk.LEFT, fill=tk.X, expand=True,
-                                    ipady=6)
+        tk.Entry(form, textvariable=self.subject_var,
+                 **entry_opts).grid(row=2, column=1, sticky='ew',
+                                    ipady=PAD_SM, pady=(0, PAD_SM))
 
-        # 分割线
-        tk.Frame(form, bg='#d3d1c7', height=1).pack(fill=tk.X, pady=4)
+        # 正文（grid 布局，rowconfigure 让它拉伸）
+        form.rowconfigure(3, weight=1)
+        body_frame = tk.Frame(form, bg=BG)
+        body_frame.grid(row=3, column=0, columnspan=2, sticky='nsew',
+                        pady=(PAD_SM, 0))
+        body_frame.rowconfigure(0, weight=1)
+        body_frame.columnconfigure(0, weight=1)
 
-        # 正文
-        body_frame = tk.Frame(form, bg=bg)
-        body_frame.pack(fill=tk.BOTH, expand=True)
         self.body_text = tk.Text(
             body_frame,
-            font=('Microsoft YaHei', 11),
-            fg='#2c2c2a', bg='white',
+            font=BODY,
+            fg=TEXT, bg='white',
             relief='flat',
             highlightthickness=1,
-            highlightbackground='#d3d1c7',
-            wrap=tk.WORD, padx=10, pady=10
+            highlightbackground=DIVIDER,
+            highlightcolor=TEXT,
+            wrap=tk.WORD, padx=PAD_MD, pady=PAD_MD
         )
         body_scroll = ttk.Scrollbar(body_frame, orient=tk.VERTICAL,
-                                    command=self.body_text.yview)
+                                    command=self.body_text.yview,
+                                    style='Mail.Vertical.TScrollbar')
         self.body_text.configure(yscrollcommand=body_scroll.set)
-        self.body_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        body_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.body_text.grid(row=0, column=0, sticky='nsew')
+        body_scroll.grid(row=0, column=1, sticky='ns')
 
-        # 底部工具栏（附件 + 状态）
+        # 底部工具栏
         bottom = tk.Frame(self.win, bg='#ebebeb', height=38)
         bottom.pack(fill=tk.X)
         bottom.pack_propagate(False)
 
-        tk.Button(
+        attach_btn = tk.Button(
             bottom, text='📎 添加附件',
-            font=('Microsoft YaHei', 9),
-            bg='#ebebeb', fg='#5f5e5a',
-            activebackground='#d3d1c7',
-            relief='flat', cursor='hand2', padx=10,
+            font=TINY,
+            bg=DIVIDER, fg=TEXT_SEC,
+            activebackground='#c3c1b7',
+            relief='flat', cursor='hand2', padx=PAD_MD,
             command=self._add_attachment
-        ).pack(side=tk.LEFT, pady=6)
+        )
+        attach_btn.pack(side=tk.LEFT, pady=PAD_SM)
+        self._bind_hover(attach_btn, DIVIDER, '#c3c1b7')
 
         self.attach_label = tk.Label(
             bottom, text='',
-            font=('Microsoft YaHei', 9),
-            fg='#888780', bg='#ebebeb', anchor='w'
+            font=TINY,
+            fg=TEXT_MUTED, bg='#ebebeb', anchor='w'
         )
         self.attach_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.status_var = tk.StringVar()
         tk.Label(bottom, textvariable=self.status_var,
-                 font=('Microsoft YaHei', 9),
-                 fg='#1D9E75', bg='#ebebeb').pack(side=tk.RIGHT, padx=12)
+                 font=TINY,
+                 fg=ACCENT, bg='#ebebeb').pack(side=tk.RIGHT, padx=PAD_MD)
 
     # ------------------------------------------------------------------ #
     #  事件处理
@@ -239,3 +252,8 @@ class ComposeWindow:
         messagebox.showerror('发送失败',
                              f'邮件发送失败，请检查网络和授权码。\n\n错误信息：{err_msg}',
                              parent=self.win)
+
+    @staticmethod
+    def _bind_hover(btn, normal_bg, hover_bg):
+        btn.bind('<Enter>', lambda e: btn.config(bg=hover_bg))
+        btn.bind('<Leave>', lambda e: btn.config(bg=normal_bg))

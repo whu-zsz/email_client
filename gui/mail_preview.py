@@ -4,6 +4,7 @@ import re
 import tempfile
 import tkinter as tk
 from tkinter import ttk
+from utils.theme import BODY, CARD, TEXT, FAMILY
 
 try:
     from tkinterweb import HtmlFrame
@@ -33,9 +34,9 @@ class MailPreview:
         self.text_frame = tk.Frame(self.container, bg='white')
         self.text_widget = tk.Text(
             self.text_frame,
-            font=('Microsoft YaHei', 11),
-            fg='#2c2c2a',
-            bg='white',
+            font=BODY,
+            fg=TEXT,
+            bg=CARD,
             relief='flat',
             padx=20,
             pady=16,
@@ -139,24 +140,25 @@ class MailPreview:
 
     @staticmethod
     def _wrap_document(html: str) -> str:
-        base_style = '''
+        from utils.theme import FAMILY as _F
+        base_style = f'''
         <style>
-            html {
+            html {{
                 tkinterweb-overflow-x: auto;
                 overflow-y: auto;
                 background: #f3f4f6;
-            }
-            body {
+            }}
+            body {{
                 margin: 0;
                 padding: 20px 24px;
                 background: #f3f4f6;
                 color: #1f2937;
-                font-family: "Microsoft YaHei", Arial, sans-serif;
+                font-family: "{_F}", "Microsoft YaHei", Arial, sans-serif;
                 line-height: 1.6;
                 min-width: 760px;
                 box-sizing: border-box;
-            }
-            .mail-shell {
+            }}
+            .mail-shell {{
                 width: max-content;
                 min-width: 720px;
                 max-width: 960px;
@@ -166,18 +168,18 @@ class MailPreview:
                 border-radius: 8px;
                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
                 box-sizing: border-box;
-            }
-            img {
+            }}
+            img {{
                 max-width: 100%;
                 height: auto;
-            }
-            table {
+            }}
+            table {{
                 border-collapse: collapse;
-            }
-            pre {
+            }}
+            pre {{
                 white-space: pre-wrap;
                 word-break: break-word;
-            }
+            }}
         </style>
         '''
         lower_html = html.lower()

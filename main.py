@@ -2,6 +2,7 @@
 import tkinter as tk
 from db.database import init_db
 from gui.login_window import LoginWindow
+from utils.theme import setup_styles
 
 def main():
     # 初始化数据库
@@ -9,6 +10,7 @@ def main():
 
     # 启动 GUI
     root = tk.Tk()
+    setup_styles()
     app = LoginWindow(root)
     root.mainloop()
 

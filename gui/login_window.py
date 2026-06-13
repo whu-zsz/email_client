@@ -8,6 +8,13 @@ import threading
 import configparser
 import os
 
+from utils.theme import (
+    BG, HEADER, TEXT, TEXT_SEC, TEXT_MUTED, TEXT_HINT, ACCENT, ACCENT_HOVER,
+    ERROR, HOVER, HEADER_HOVER, DIVIDER,
+    BODY, SMALL, TINY, FAMILY,
+    PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+)
+
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
 
 # 预设邮箱服务器配置
@@ -27,7 +34,7 @@ class LoginWindow:
         self.root.title('邮件客户端')
         self.root.geometry('420x480')
         self.root.resizable(False, False)
-        self.root.configure(bg='#f5f5f0')
+        self.root.configure(bg=BG)
 
         # 居中显示
         self.root.update_idletasks()
@@ -43,95 +50,95 @@ class LoginWindow:
     # ------------------------------------------------------------------ #
 
     def _build_ui(self):
-        bg = '#f5f5f0'
-
         # 顶部标题区
-        header = tk.Frame(self.root, bg='#2c2c2a', height=90)
+        header = tk.Frame(self.root, bg=HEADER, height=90)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         tk.Label(header, text='📧 邮件客户端',
-                 font=('Microsoft YaHei', 18, 'bold'),
-                 fg='white', bg='#2c2c2a').pack(expand=True)
+                 font=(FAMILY, 18, 'bold'),
+                 fg='white', bg=HEADER).pack(expand=True)
 
         # 主体表单区
-        form = tk.Frame(self.root, bg=bg, padx=40)
-        form.pack(fill=tk.BOTH, expand=True, pady=20)
+        form = tk.Frame(self.root, bg=BG, padx=PAD_XL)
+        form.pack(fill=tk.BOTH, expand=True, pady=PAD_XL)
 
         # 邮箱类型选择
-        tk.Label(form, text='邮箱类型', font=('Microsoft YaHei', 10),
-                 fg='#5f5e5a', bg=bg).pack(anchor='w', pady=(0, 4))
+        tk.Label(form, text='邮箱类型', font=SMALL,
+                 fg=TEXT_SEC, bg=BG).pack(anchor='w', pady=(0, PAD_SM))
         self.server_var = tk.StringVar(value='QQ邮箱')
         server_cb = ttk.Combobox(form, textvariable=self.server_var,
                                  values=list(SERVER_PRESETS.keys()),
-                                 state='readonly', font=('Microsoft YaHei', 11))
-        server_cb.pack(fill=tk.X, ipady=4)
+                                 state='readonly', font=BODY,
+                                 style='Mail.TCombobox')
+        server_cb.pack(fill=tk.X, ipady=PAD_SM)
         server_cb.bind('<<ComboboxSelected>>', self._on_server_change)
 
         # 邮箱地址
-        tk.Label(form, text='邮箱地址', font=('Microsoft YaHei', 10),
-                 fg='#5f5e5a', bg=bg).pack(anchor='w', pady=(14, 4))
+        tk.Label(form, text='邮箱地址', font=SMALL,
+                 fg=TEXT_SEC, bg=BG).pack(anchor='w', pady=(PAD_LG, PAD_SM))
         self.email_var = tk.StringVar()
         email_entry = tk.Entry(form, textvariable=self.email_var,
-                               font=('Microsoft YaHei', 11),
+                               font=BODY,
                                relief='flat', bd=0,
                                highlightthickness=1,
-                               highlightbackground='#d3d1c7',
-                               highlightcolor='#2c2c2a')
-        email_entry.pack(fill=tk.X, ipady=7)
+                               highlightbackground=DIVIDER,
+                               highlightcolor=TEXT)
+        email_entry.pack(fill=tk.X, ipady=8)
 
         # 授权码
         tk.Label(form, text='授权码（非登录密码）',
-                 font=('Microsoft YaHei', 10),
-                 fg='#5f5e5a', bg=bg).pack(anchor='w', pady=(14, 4))
+                 font=SMALL,
+                 fg=TEXT_SEC, bg=BG).pack(anchor='w', pady=(PAD_LG, PAD_SM))
         self.pwd_var = tk.StringVar()
         self.pwd_entry = tk.Entry(form, textvariable=self.pwd_var,
-                                  show='●', font=('Microsoft YaHei', 11),
+                                  show='●', font=BODY,
                                   relief='flat', bd=0,
                                   highlightthickness=1,
-                                  highlightbackground='#d3d1c7',
-                                  highlightcolor='#2c2c2a')
-        self.pwd_entry.pack(fill=tk.X, ipady=7)
+                                  highlightbackground=DIVIDER,
+                                  highlightcolor=TEXT)
+        self.pwd_entry.pack(fill=tk.X, ipady=8)
 
         # 显示/隐藏密码
         self.show_pwd = False
         tk.Checkbutton(form, text='显示授权码',
-                       font=('Microsoft YaHei', 9),
-                       fg='#888780', bg=bg, activebackground=bg,
-                       command=self._toggle_pwd).pack(anchor='w', pady=(4, 0))
+                       font=TINY,
+                       fg=TEXT_MUTED, bg=BG, activebackground=BG,
+                       command=self._toggle_pwd).pack(anchor='w', pady=(PAD_SM, 0))
 
         # 记住账号
         self.remember_var = tk.BooleanVar(value=True)
         tk.Checkbutton(form, text='记住账号',
                        variable=self.remember_var,
-                       font=('Microsoft YaHei', 9),
-                       fg='#888780', bg=bg, activebackground=bg).pack(
+                       font=TINY,
+                       fg=TEXT_MUTED, bg=BG, activebackground=BG).pack(
                            anchor='w')
 
         # 登录按钮
         self.login_btn = tk.Button(
             form, text='登  录',
-            font=('Microsoft YaHei', 12, 'bold'),
-            bg='#2c2c2a', fg='white',
-            activebackground='#444441', activeforeground='white',
+            font=(FAMILY, 12, 'bold'),
+            bg=ACCENT, fg='white',
+            activebackground=ACCENT_HOVER, activeforeground='white',
             relief='flat', cursor='hand2',
             command=self._on_login
         )
-        self.login_btn.pack(fill=tk.X, ipady=10, pady=(20, 0))
+        self.login_btn.pack(fill=tk.X, ipady=10, pady=(PAD_XL, 0))
+        self._bind_hover(self.login_btn, ACCENT, ACCENT_HOVER)
 
         # 状态提示
         self.status_var = tk.StringVar()
         self.status_label = tk.Label(
             form, textvariable=self.status_var,
-            font=('Microsoft YaHei', 9),
-            fg='#E24B4A', bg=bg
+            font=TINY,
+            fg=ERROR, bg=BG
         )
-        self.status_label.pack(pady=(8, 0))
+        self.status_label.pack(pady=(PAD_SM, 0))
 
         # 底部提示
         tk.Label(self.root,
                  text='授权码获取：邮箱设置 → 账户 → 开启POP3/SMTP → 生成授权码',
-                 font=('Microsoft YaHei', 8),
-                 fg='#b4b2a9', bg=bg).pack(pady=(0, 10))
+                 font=TINY,
+                 fg=TEXT_HINT, bg=BG).pack(pady=(0, PAD_MD))
 
     # ------------------------------------------------------------------ #
     #  事件处理
@@ -144,6 +151,12 @@ class LoginWindow:
     def _toggle_pwd(self):
         self.show_pwd = not self.show_pwd
         self.pwd_entry.config(show='' if self.show_pwd else '●')
+
+    @staticmethod
+    def _bind_hover(btn, normal_bg, hover_bg):
+        """为按钮绑定 hover 变色效果"""
+        btn.bind('<Enter>', lambda e: btn.config(bg=hover_bg))
+        btn.bind('<Leave>', lambda e: btn.config(bg=normal_bg))
 
     def _on_login(self):
         email = self.email_var.get().strip()

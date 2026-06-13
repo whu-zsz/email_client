@@ -6,6 +6,14 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from gui.mail_preview import MailPreview
+from utils.theme import (
+    BG, CARD, HEADER, DIVIDER, DIVIDER_DK,
+    TEXT, TEXT_SEC, TEXT_MUTED, TEXT_HINT,
+    ACCENT, ERROR, HOVER, HEADER_HOVER,
+    SELECT_BG, SELECT_FG, UNREAD_DOT,
+    BODY, HEADING, SMALL, TINY, FAMILY,
+    PAD_XS, PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+)
 
 
 class MainWindow:
@@ -18,11 +26,12 @@ class MainWindow:
         self.account = account
         self.mails = []
         self.current_folder = 'inbox'
+        self._anim_id = None
 
         self.root.title(f'邮件客户端 — {account["email"]}')
         self.root.geometry('960x640')
         self.root.minsize(800, 500)
-        self.root.configure(bg='#f5f5f0')
+        self.root.configure(bg=BG)
 
         self.root.update_idletasks()
         x = (self.root.winfo_screenwidth() - 960) // 2
@@ -37,127 +46,167 @@ class MainWindow:
     # ------------------------------------------------------------------ #
 
     def _build_ui(self):
-        toolbar = tk.Frame(self.root, bg='#2c2c2a', height=50)
+        # --- 工具栏（保持 pack） ---
+        toolbar = tk.Frame(self.root, bg=HEADER, height=50)
         toolbar.pack(fill=tk.X)
         toolbar.pack_propagate(False)
 
-        btn_style = dict(
-            font=('Microsoft YaHei', 10),
-            bg='#2c2c2a',
+        btn_cfg = dict(
+            font=SMALL,
+            bg='#505050',
             fg='white',
-            activebackground='#444441',
+            activebackground='#666666',
             activeforeground='white',
             relief='flat',
             cursor='hand2',
-            padx=14,
+            padx=PAD_LG,
         )
 
-        tk.Button(toolbar, text='✏ 写信', command=self._open_compose, **btn_style).pack(side=tk.LEFT, pady=8)
-        tk.Button(toolbar, text='⟳ 收信', command=self._fetch_mails, **btn_style).pack(side=tk.LEFT, pady=8)
-        tk.Button(toolbar, text='🗑 删除', command=self._delete_selected, **btn_style).pack(side=tk.LEFT, pady=8)
+        self.btn_compose = tk.Button(toolbar, text='✏ 写信',
+                                     command=self._open_compose, **btn_cfg)
+        self.btn_compose.pack(side=tk.LEFT, pady=PAD_SM, padx=(PAD_MD, PAD_SM))
+
+        self.btn_fetch = tk.Button(toolbar, text='⟳ 收信',
+                                   command=self._fetch_mails, **btn_cfg)
+        self.btn_fetch.pack(side=tk.LEFT, pady=PAD_SM, padx=PAD_SM)
+
+        self.btn_delete = tk.Button(toolbar, text='🗑 删除',
+                                    command=self._delete_selected, **btn_cfg)
+        self.btn_delete.pack(side=tk.LEFT, pady=PAD_SM, padx=PAD_SM)
+
+        for btn in (self.btn_compose, self.btn_fetch, self.btn_delete):
+            self._bind_hover(btn, '#505050', '#666666')
 
         tk.Label(
             toolbar,
             text=self.account['email'],
-            font=('Microsoft YaHei', 9),
-            fg='#b4b2a9',
-            bg='#2c2c2a',
-        ).pack(side=tk.RIGHT, padx=16)
+            font=TINY,
+            fg=TEXT_HINT,
+            bg=HEADER,
+        ).pack(side=tk.RIGHT, padx=PAD_LG)
 
-        body = tk.Frame(self.root, bg='#f5f5f0')
+        # --- body 区域改用 grid ---
+        body = tk.Frame(self.root, bg=BG)
         body.pack(fill=tk.BOTH, expand=True)
 
-        self._build_left(body)
-        tk.Frame(body, bg='#d3d1c7', width=1).pack(side=tk.LEFT, fill=tk.Y)
-        self._build_middle(body)
-        tk.Frame(body, bg='#d3d1c7', width=1).pack(side=tk.LEFT, fill=tk.Y)
-        self._build_right(body)
+        body.columnconfigure(0, weight=0)  # 左栏固定
+        body.columnconfigure(1, weight=0)  # 分割线
+        body.columnconfigure(2, weight=0)  # 中栏固定
+        body.columnconfigure(3, weight=0)  # 分割线
+        body.columnconfigure(4, weight=1)  # 右栏拉伸
+        body.rowconfigure(0, weight=1)
 
-        statusbar = tk.Frame(self.root, bg='#d3d1c7', height=1)
+        # 左栏
+        left = tk.Frame(body, bg=BG, width=160)
+        left.grid(row=0, column=0, sticky='ns')
+        left.grid_propagate(False)
+        self._build_left(left)
+
+        # 分割线 1
+        tk.Frame(body, bg=DIVIDER_DK, width=1).grid(row=0, column=1, sticky='ns')
+
+        # 中栏
+        mid = tk.Frame(body, bg=CARD, width=320)
+        mid.grid(row=0, column=2, sticky='ns')
+        mid.grid_propagate(False)
+        self._build_middle(mid)
+
+        # 分割线 2
+        tk.Frame(body, bg=DIVIDER_DK, width=1).grid(row=0, column=3, sticky='ns')
+
+        # 右栏
+        right = tk.Frame(body, bg=CARD)
+        right.grid(row=0, column=4, sticky='nsew')
+        self._build_right(right)
+
+        # --- 状态栏（保持 pack） ---
+        statusbar = tk.Frame(self.root, bg=DIVIDER, height=1)
         statusbar.pack(fill=tk.X)
         self.status_var = tk.StringVar(value='就绪')
         tk.Label(
             self.root,
             textvariable=self.status_var,
-            font=('Microsoft YaHei', 9),
-            fg='#888780',
-            bg='#f5f5f0',
+            font=TINY,
+            fg=TEXT_MUTED,
+            bg=BG,
             anchor='w',
-        ).pack(fill=tk.X, padx=10, pady=3)
+        ).pack(fill=tk.X, padx=PAD_MD, pady=PAD_XS)
 
     def _build_left(self, parent):
         """左栏：文件夹列表"""
-        left = tk.Frame(parent, bg='#f5f5f0', width=150)
-        left.pack(side=tk.LEFT, fill=tk.Y)
-        left.pack_propagate(False)
-
         tk.Label(
-            left,
+            parent,
             text='文件夹',
-            font=('Microsoft YaHei', 10, 'bold'),
-            fg='#2c2c2a',
-            bg='#f5f5f0',
-        ).pack(anchor='w', padx=16, pady=(16, 8))
+            font=(FAMILY, 10, 'bold'),
+            fg=TEXT,
+            bg=BG,
+        ).pack(anchor='w', padx=PAD_LG, pady=(PAD_LG, PAD_SM))
 
         folders = [('inbox', '📥 收件箱'), ('sent', '📤 已发送')]
         self.folder_btns = {}
         for key, label in folders:
             btn = tk.Button(
-                left,
+                parent,
                 text=label,
                 anchor='w',
-                font=('Microsoft YaHei', 10),
-                fg='#2c2c2a',
-                bg='#f5f5f0',
-                activebackground='#e8e8e4',
+                font=SMALL,
+                fg=TEXT,
+                bg=BG,
+                activebackground=HOVER,
                 relief='flat',
                 cursor='hand2',
-                padx=16,
-                pady=6,
+                padx=PAD_LG,
+                pady=PAD_SM,
                 command=lambda k=key: self._switch_folder(k),
             )
-            btn.pack(fill=tk.X)
+            btn.pack(fill=tk.X, pady=PAD_XS)
+            self._bind_hover(btn, BG, HOVER)
             self.folder_btns[key] = btn
 
         self._highlight_folder('inbox')
 
     def _build_middle(self, parent):
         """中栏：邮件列表"""
-        mid = tk.Frame(parent, bg='white', width=320)
-        mid.pack(side=tk.LEFT, fill=tk.BOTH)
-        mid.pack_propagate(False)
-
         self.list_title = tk.Label(
-            mid,
+            parent,
             text='收件箱',
-            font=('Microsoft YaHei', 11, 'bold'),
-            fg='#2c2c2a',
-            bg='white',
+            font=(FAMILY, 11, 'bold'),
+            fg=TEXT,
+            bg=CARD,
             anchor='w',
         )
-        self.list_title.pack(fill=tk.X, padx=14, pady=(12, 6))
+        self.list_title.pack(fill=tk.X, padx=PAD_LG, pady=(PAD_MD, PAD_SM))
 
-        tk.Frame(mid, bg='#d3d1c7', height=1).pack(fill=tk.X)
+        tk.Frame(parent, bg=DIVIDER, height=1).pack(fill=tk.X)
 
-        search_frame = tk.Frame(mid, bg='white')
-        search_frame.pack(fill=tk.X, padx=10, pady=6)
+        # 搜索框（带 🔍 图标）
+        search_frame = tk.Frame(parent, bg=CARD)
+        search_frame.pack(fill=tk.X, padx=PAD_MD, pady=PAD_SM)
+
+        tk.Label(search_frame, text='🔍', font=TINY,
+                 fg=TEXT_MUTED, bg=CARD).pack(side=tk.LEFT, padx=(0, PAD_XS))
+
         self.search_var = tk.StringVar()
         search_entry = tk.Entry(
             search_frame,
             textvariable=self.search_var,
-            font=('Microsoft YaHei', 10),
+            font=SMALL,
             relief='flat',
             bd=0,
             highlightthickness=1,
-            highlightbackground='#d3d1c7',
-            highlightcolor='#2c2c2a',
-            fg='#5f5e5a',
+            highlightbackground=DIVIDER,
+            highlightcolor=TEXT,
+            fg=TEXT_SEC,
         )
-        search_entry.pack(fill=tk.X, ipady=5, padx=2)
+        search_entry.pack(fill=tk.X, ipady=PAD_SM, side=tk.LEFT, expand=True)
         self._add_placeholder(search_entry, '搜索邮件...')
 
+        # Treeview
         cols = ('subject', 'from', 'date')
-        self.mail_tree = ttk.Treeview(mid, columns=cols, show='headings', selectmode='browse')
+        self.mail_tree = ttk.Treeview(
+            parent, columns=cols, show='headings', selectmode='browse',
+            style='Mail.Treeview',
+        )
         self.mail_tree.heading('subject', text='主题')
         self.mail_tree.heading('from', text='发件人')
         self.mail_tree.heading('date', text='时间')
@@ -165,31 +214,33 @@ class MainWindow:
         self.mail_tree.column('from', width=100, stretch=False)
         self.mail_tree.column('date', width=80, stretch=False)
 
-        scrollbar = ttk.Scrollbar(mid, orient=tk.VERTICAL, command=self.mail_tree.yview)
+        scrollbar = ttk.Scrollbar(
+            parent, orient=tk.VERTICAL,
+            command=self.mail_tree.yview,
+            style='Mail.Vertical.TScrollbar',
+        )
         self.mail_tree.configure(yscrollcommand=scrollbar.set)
         self.mail_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.mail_tree.tag_configure('unread', font=('Microsoft YaHei', 10, 'bold'))
-        self.mail_tree.tag_configure('read', font=('Microsoft YaHei', 10))
+        # 未读/已读 tag 样式
+        self.mail_tree.tag_configure('unread', font=(FAMILY, 10, 'bold'),
+                                     foreground=TEXT)
+        self.mail_tree.tag_configure('read', font=SMALL, foreground=TEXT_SEC)
 
         self.mail_tree.bind('<<TreeviewSelect>>', self._on_mail_select)
-        self.mail_tree.bind('<Double-1>', self._on_mail_select)
         self.search_var.trace('w', self._on_search)
 
     def _build_right(self, parent):
         """右栏：邮件正文预览"""
-        right = tk.Frame(parent, bg='white')
-        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.header_frame = tk.Frame(right, bg='#fafaf8', pady=12, padx=16)
+        self.header_frame = tk.Frame(parent, bg='#fafaf8', pady=PAD_MD, padx=PAD_LG)
         self.header_frame.pack(fill=tk.X)
 
         self.lbl_subject = tk.Label(
             self.header_frame,
             text='',
-            font=('Microsoft YaHei', 13, 'bold'),
-            fg='#2c2c2a',
+            font=HEADING,
+            fg=TEXT,
             bg='#fafaf8',
             anchor='w',
             wraplength=400,
@@ -199,36 +250,36 @@ class MainWindow:
         self.lbl_from = tk.Label(
             self.header_frame,
             text='',
-            font=('Microsoft YaHei', 9),
-            fg='#888780',
+            font=TINY,
+            fg=TEXT_MUTED,
             bg='#fafaf8',
             anchor='w',
         )
-        self.lbl_from.pack(fill=tk.X, pady=(4, 0))
+        self.lbl_from.pack(fill=tk.X, pady=(PAD_SM, 0))
 
         self.lbl_date = tk.Label(
             self.header_frame,
             text='',
-            font=('Microsoft YaHei', 9),
-            fg='#b4b2a9',
+            font=TINY,
+            fg=TEXT_HINT,
             bg='#fafaf8',
             anchor='w',
         )
         self.lbl_date.pack(fill=tk.X)
 
-        tk.Frame(right, bg='#d3d1c7', height=1).pack(fill=tk.X)
+        tk.Frame(parent, bg=DIVIDER, height=1).pack(fill=tk.X)
 
-        preview_frame = tk.Frame(right, bg='white')
+        preview_frame = tk.Frame(parent, bg=CARD)
         preview_frame.pack(fill=tk.BOTH, expand=True)
         self.preview = MailPreview(preview_frame)
 
-        self.attach_frame = tk.Frame(right, bg='#f5f5f0', pady=8, padx=16)
+        self.attach_frame = tk.Frame(parent, bg=BG, pady=PAD_SM, padx=PAD_LG)
         self.attach_label = tk.Label(
             self.attach_frame,
             text='',
-            font=('Microsoft YaHei', 9),
-            fg='#5f5e5a',
-            bg='#f5f5f0',
+            font=TINY,
+            fg=TEXT_SEC,
+            bg=BG,
             anchor='w',
         )
         self.attach_label.pack(fill=tk.X)
@@ -240,17 +291,17 @@ class MainWindow:
     def _add_placeholder(self, entry, text):
         """为 Entry 添加占位提示文字"""
         entry.insert(0, text)
-        entry.config(fg='#b4b2a9')
+        entry.config(fg=TEXT_HINT)
 
         def on_focus_in(_event):
             if entry.get() == text:
                 entry.delete(0, tk.END)
-                entry.config(fg='#2c2c2a')
+                entry.config(fg=TEXT)
 
         def on_focus_out(_event):
             if not entry.get():
                 entry.insert(0, text)
-                entry.config(fg='#b4b2a9')
+                entry.config(fg=TEXT_HINT)
 
         entry.bind('<FocusIn>', on_focus_in)
         entry.bind('<FocusOut>', on_focus_out)
@@ -258,13 +309,18 @@ class MainWindow:
     def _highlight_folder(self, key):
         for k, btn in self.folder_btns.items():
             if k == key:
-                btn.config(bg='#e8e8e4', fg='#2c2c2a')
+                btn.config(bg=HOVER, fg=TEXT)
             else:
-                btn.config(bg='#f5f5f0', fg='#5f5e5a')
+                btn.config(bg=BG, fg=TEXT_SEC)
 
     def _set_status(self, text):
         self.status_var.set(text)
         self.root.update_idletasks()
+
+    @staticmethod
+    def _bind_hover(btn, normal_bg, hover_bg):
+        btn.bind('<Enter>', lambda e: btn.config(bg=hover_bg))
+        btn.bind('<Leave>', lambda e: btn.config(bg=normal_bg))
 
     def _ensure_mail_content(self, mail: dict):
         """确保邮件拥有 HTML/附件详情，必要时按需重解析"""
@@ -356,13 +412,17 @@ class MainWindow:
             self.mail_tree.delete(item)
 
         for mail in mails:
-            tag = 'read' if mail.get('is_read') else 'unread'
+            is_unread = not mail.get('is_read')
+            tag = 'unread' if is_unread else 'read'
             subject = mail.get('subject', '（无主题）') or '（无主题）'
+            if is_unread:
+                subject = f'● {subject}'
             sender = mail.get('from_addr', '') or mail.get('to_addr', '')
             date = mail.get('receive_time', '') or mail.get('send_time', '')
             if date and len(date) >= 16:
                 date = date[5:16]
-            self.mail_tree.insert('', tk.END, values=(subject, sender, date), tags=(tag,), iid=str(mail.get('id', '')))
+            self.mail_tree.insert('', tk.END, values=(subject, sender, date),
+                                  tags=(tag,), iid=str(mail.get('id', '')))
 
         self._set_status(f'共 {len(mails)} 封邮件')
 
@@ -418,7 +478,8 @@ class MainWindow:
 
     def _fetch_mails(self):
         """后台线程收取新邮件"""
-        self._set_status('正在收取邮件...')
+        self.btn_fetch.config(state=tk.DISABLED)
+        self._start_dots_animation(self.btn_fetch, '收信', '⟳ 收信')
         threading.Thread(target=self._do_fetch, daemon=True).start()
 
     def _do_fetch(self):
@@ -438,12 +499,37 @@ class MainWindow:
 
             self.root.after(0, self._fetch_done, new_count)
         except Exception as e:
-            self.root.after(0, self._set_status, f'收信失败: {e}')
+            self.root.after(0, self._fetch_failed, str(e))
 
     def _fetch_done(self, new_count):
-        self._set_status(f'收信完成，新邮件 {new_count} 封')
+        self._stop_dots_animation(self.btn_fetch, '收信')
+        self.btn_fetch.config(state=tk.NORMAL)
+        self._set_status(f'✓ 收信完成，新邮件 {new_count} 封')
         if self.current_folder == 'inbox':
             self._load_mails_from_db()
+
+    def _fetch_failed(self, err_msg):
+        self._stop_dots_animation(self.btn_fetch, '收信')
+        self.btn_fetch.config(state=tk.NORMAL)
+        self._set_status(f'✗ 收信失败: {err_msg}')
+
+    def _start_dots_animation(self, btn, base_text, prefix=''):
+        """按钮文字加载动画"""
+        self._anim_counter = 0
+        self._anim_btn = btn
+        self._anim_base = base_text
+        dots = ['', '.', '..', '...']
+        def tick():
+            self._anim_counter = (self._anim_counter + 1) % 4
+            btn.config(text=f'{base_text}{dots[self._anim_counter]}')
+            self._anim_id = self.root.after(200, tick)
+        tick()
+
+    def _stop_dots_animation(self, btn, base_text):
+        if self._anim_id:
+            self.root.after_cancel(self._anim_id)
+            self._anim_id = None
+        btn.config(text=base_text)
 
     def _delete_selected(self):
         selected = self.mail_tree.selection()
