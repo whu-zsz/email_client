@@ -3,6 +3,7 @@
 
 import threading
 import tkinter as tk
+from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 
 from gui.mail_preview import MailPreview
@@ -75,7 +76,14 @@ class MainWindow:
             font=TINY,
             fg=TEXT_HINT,
             bg=HEADER,
-        ).pack(side=tk.RIGHT, padx=PAD_LG)
+        ).pack(side=tk.RIGHT, padx=(0, PAD_SM))
+
+        make_button(
+            toolbar, '退出', self._logout,
+            bg='#505050', hover_bg='#666666', font=TINY,
+            label_padx=PAD_SM, label_pady=PAD_XS,
+            side=tk.RIGHT, padx=(0, PAD_SM),
+        )
 
         # --- body 区域改用 grid ---
         body = tk.Frame(self.root, bg=BG)
@@ -134,16 +142,32 @@ class MainWindow:
             bg=BG,
         ).pack(anchor='w', padx=PAD_LG, pady=(PAD_LG, PAD_SM))
 
-        folders = [('inbox', '📥 收件箱'), ('sent', '📤 已发送')]
+        # 收件箱（带未读计数）
+        inbox_frame = tk.Frame(parent, bg=BG)
+        inbox_frame.pack(fill=tk.X, pady=PAD_XS)
         self.folder_btns = {}
-        for key, label in folders:
-            btn = make_button(
-                parent, label, lambda k=key: self._switch_folder(k),
-                bg=BG, fg=TEXT, hover_bg=HOVER,
-                anchor='w', label_padx=PAD_LG, label_pady=PAD_SM,
-                fill=tk.X, pady=PAD_XS,
-            )
-            self.folder_btns[key] = btn
+        self.folder_btns['inbox'] = make_button(
+            inbox_frame, '📥 收件箱', lambda k='inbox': self._switch_folder(k),
+            bg=BG, fg=TEXT, hover_bg=HOVER,
+            anchor='w', label_padx=PAD_LG, label_pady=PAD_SM,
+            fill=tk.X, side=tk.LEFT, expand=True,
+        )
+        self.unread_label = tk.Label(
+            inbox_frame, text='', font=TINY,
+            fg=ACCENT, bg=BG, padx=PAD_SM,
+        )
+        self.unread_label.pack(side=tk.RIGHT, padx=(0, PAD_SM))
+
+        # 已发送
+        self.folder_btns['sent'] = make_button(
+            parent, '📤 已发送', lambda k='sent': self._switch_folder(k),
+            bg=BG, fg=TEXT_SEC, hover_bg=HOVER,
+            anchor='w', label_padx=PAD_LG, label_pady=PAD_SM,
+            fill=tk.X, pady=PAD_XS,
+        )
+
+        # 底部退出区域
+        tk.Frame(parent, bg=BG).pack(fill=tk.BOTH, expand=True)
 
         self._highlight_folder('inbox')
 
@@ -229,23 +253,29 @@ class MainWindow:
         )
         self.lbl_subject.pack(fill=tk.X)
 
-        self.lbl_from = tk.Label(
-            self.header_frame,
-            text='',
-            font=TINY,
-            fg=TEXT_MUTED,
-            bg='#fafaf8',
-            anchor='w',
+        # 发件人行（头像 + 邮箱 + 时间）
+        from_row = tk.Frame(self.header_frame, bg='#fafaf8')
+        from_row.pack(fill=tk.X, pady=(PAD_SM, 0))
+
+        self.avatar_label = tk.Label(
+            from_row, text='', font=(FAMILY, 10, 'bold'),
+            fg='white', bg=ACCENT, width=2, height=1,
+            anchor='center',
         )
-        self.lbl_from.pack(fill=tk.X, pady=(PAD_SM, 0))
+        self.avatar_label.pack(side=tk.LEFT, padx=(0, PAD_SM))
+
+        info_frame = tk.Frame(from_row, bg='#fafaf8')
+        info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.lbl_from = tk.Label(
+            info_frame, text='', font=SMALL,
+            fg=TEXT, bg='#fafaf8', anchor='w',
+        )
+        self.lbl_from.pack(fill=tk.X)
 
         self.lbl_date = tk.Label(
-            self.header_frame,
-            text='',
-            font=TINY,
-            fg=TEXT_HINT,
-            bg='#fafaf8',
-            anchor='w',
+            info_frame, text='', font=TINY,
+            fg=TEXT_HINT, bg='#fafaf8', anchor='w',
         )
         self.lbl_date.pack(fill=tk.X)
 
@@ -400,13 +430,31 @@ class MainWindow:
             if is_unread:
                 subject = f'● {subject}'
             sender = mail.get('from_addr', '') or mail.get('to_addr', '')
-            date = mail.get('receive_time', '') or mail.get('send_time', '')
-            if date and len(date) >= 16:
-                date = date[5:16]
+            date = self._format_date(
+                mail.get('receive_time', '') or mail.get('send_time', '')
+            )
             self.mail_tree.insert('', tk.END, values=(subject, sender, date),
                                   tags=(tag,), iid=str(mail.get('id', '')))
 
+        self._update_unread_count()
         self._set_status(f'共 {len(mails)} 封邮件')
+
+    @staticmethod
+    def _format_date(date_str: str) -> str:
+        """格式化日期：今天显示时间，昨天显示'昨天'，更早显示 MM-DD"""
+        if not date_str or len(date_str) < 16:
+            return date_str
+        try:
+            dt = datetime.strptime(date_str[:16], '%Y-%m-%d %H:%M')
+            now = datetime.now()
+            if dt.date() == now.date():
+                return dt.strftime('%H:%M')
+            elif dt.date() == (now - timedelta(days=1)).date():
+                return '昨天'
+            else:
+                return dt.strftime('%m-%d')
+        except Exception:
+            return date_str[5:16] if len(date_str) >= 16 else date_str
 
     def _on_search(self, *_args):
         """搜索过滤邮件列表"""
@@ -442,8 +490,14 @@ class MainWindow:
                 from db.database import mark_as_read
 
                 mark_as_read(int(mail_id))
+                # 更新内存中的状态
+                for m in self.mails:
+                    if str(m.get('id', '')) == mail_id:
+                        m['is_read'] = 1
+                        break
             except Exception:
                 pass
+            self._update_unread_count()
 
         self.lbl_subject.config(text=mail.get('subject', '（无主题）') or '（无主题）')
         sender = mail.get('from_addr', '') or mail.get('to_addr', '')
@@ -451,6 +505,12 @@ class MainWindow:
         self.lbl_from.config(text=f'{prefix}{sender}')
         date = mail.get('receive_time') or mail.get('send_time', '')
         self.lbl_date.config(text=f'时间：{date}')
+
+        # 更新头像
+        initial = (sender[0] if sender else '?').upper()
+        colors = ['#1D9E75', '#378ADD', '#7F77DD', '#BA7517', '#E24B4A']
+        color = colors[hash(sender) % len(colors)]
+        self.avatar_label.config(text=initial, bg=color)
 
         self._render_mail_preview(mail)
 
@@ -493,6 +553,7 @@ class MainWindow:
         self._set_status(f'✓ 收信完成，新邮件 {new_count} 封')
         if self.current_folder == 'inbox':
             self._load_mails_from_db()
+        self._update_unread_count()
 
     def _fetch_failed(self, err_msg):
         self._stop_dots_animation(self.btn_fetch, '收信')
@@ -537,6 +598,7 @@ class MainWindow:
             self.lbl_date.config(text='')
             self.preview.clear()
             self.attach_frame.pack_forget()
+            self._update_unread_count()
             self._set_status('邮件已删除')
         except Exception as e:
             messagebox.showerror('删除失败', str(e))
@@ -545,3 +607,22 @@ class MainWindow:
         from gui.compose_window import ComposeWindow
 
         ComposeWindow(self.root, self.account)
+
+    def _update_unread_count(self):
+        """更新收件箱未读数"""
+        if self.current_folder != 'inbox':
+            self.unread_label.config(text='')
+            return
+        count = sum(1 for m in self.mails if not m.get('is_read'))
+        if count > 0:
+            self.unread_label.config(text=str(count))
+        else:
+            self.unread_label.config(text='')
+
+    def _logout(self):
+        """退出登录，返回登录窗口"""
+        if messagebox.askyesno('确认退出', '确定要退出登录吗？'):
+            if hasattr(self.root, '_on_logout'):
+                self.root._on_logout()
+            else:
+                self.root.destroy()
