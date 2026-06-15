@@ -118,10 +118,12 @@ class SMTPClient:
         构造 MIME 格式邮件内容
         返回符合 RFC 2822 的邮件字符串
         """
+        from email.utils import formatdate
         msg = MIMEMultipart()
         msg['From']    = from_addr
         msg['To']      = to_addr
         msg['Subject'] = Header(subject, 'utf-8')  # 中文主题编码
+        msg['Date']    = formatdate(localtime=True)  # 当前时间
 
         # 正文（UTF-8 纯文本）
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
