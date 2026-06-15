@@ -11,6 +11,7 @@ from utils.theme import (
     ACCENT, ACCENT_HOVER, ERROR, HOVER, HEADER_HOVER,
     BODY, SMALL, TINY, FAMILY,
     PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+    make_button,
 )
 
 
@@ -18,6 +19,7 @@ class ComposeWindow:
     def __init__(self, parent, account: dict):
         self.account     = account
         self.attachments = []   # 附件路径列表
+        self._sending    = False
 
         self.win = tk.Toplevel(parent)
         self.win.title('写信')
@@ -49,16 +51,12 @@ class ComposeWindow:
                                              pady=PAD_MD)
 
         # 发送按钮
-        self.send_btn = tk.Button(
-            header, text='发  送 ▶',
-            font=(FAMILY, 10, 'bold'),
-            bg=ACCENT, fg='white',
-            activebackground=ACCENT_HOVER, activeforeground='white',
-            relief='flat', cursor='hand2', padx=PAD_LG,
-            command=self._on_send
+        self.send_btn = make_button(
+            header, '发  送 ▶', self._on_send,
+            bg=ACCENT, fg='white', hover_bg=ACCENT_HOVER,
+            font=(FAMILY, 10, 'bold'), label_padx=PAD_LG,
+            side=tk.RIGHT, padx=PAD_MD, pady=PAD_SM,
         )
-        self.send_btn.pack(side=tk.RIGHT, padx=PAD_MD, pady=PAD_SM)
-        self._bind_hover(self.send_btn, ACCENT, ACCENT_HOVER)
 
         # 表单区域（用 grid 实现自适应）
         form = tk.Frame(self.win, bg=BG, padx=PAD_XL)
@@ -136,16 +134,12 @@ class ComposeWindow:
         bottom.pack(fill=tk.X)
         bottom.pack_propagate(False)
 
-        attach_btn = tk.Button(
-            bottom, text='📎 添加附件',
-            font=TINY,
-            bg=DIVIDER, fg=TEXT_SEC,
-            activebackground='#c3c1b7',
-            relief='flat', cursor='hand2', padx=PAD_MD,
-            command=self._add_attachment
+        make_button(
+            bottom, '📎 添加附件', self._add_attachment,
+            bg=DIVIDER, fg=TEXT_SEC, hover_bg='#c3c1b7',
+            font=TINY, label_padx=PAD_MD,
+            side=tk.LEFT, pady=PAD_SM,
         )
-        attach_btn.pack(side=tk.LEFT, pady=PAD_SM)
-        self._bind_hover(attach_btn, DIVIDER, '#c3c1b7')
 
         self.attach_label = tk.Label(
             bottom, text='',
@@ -182,6 +176,8 @@ class ComposeWindow:
                 text=f'📎 {len(self.attachments)} 个附件：{names[:60]}')
 
     def _on_send(self):
+        if self._sending:
+            return
         to_addr = self.to_var.get().strip()
         subject = self.subject_var.get().strip()
         body    = self.body_text.get('1.0', tk.END).strip()
@@ -199,7 +195,8 @@ class ComposeWindow:
                 return
 
         # 禁用发送按钮，后台发送
-        self.send_btn.config(text='发送中...', state=tk.DISABLED)
+        self._sending = True
+        self.send_btn.config(text='发送中...', fg=TEXT_MUTED)
         self.status_var.set('')
 
         threading.Thread(
@@ -241,13 +238,15 @@ class ComposeWindow:
             self.win.after(0, self._send_failed, str(e))
 
     def _send_success(self):
+        self._sending = False
         self.status_var.set('✓ 发送成功')
-        self.send_btn.config(text='发  送 ▶', state=tk.NORMAL)
+        self.send_btn.config(text='发  送 ▶', fg='white')
         messagebox.showinfo('发送成功', '邮件已成功发送！', parent=self.win)
         self.win.destroy()
 
     def _send_failed(self, err_msg):
-        self.send_btn.config(text='发  送 ▶', state=tk.NORMAL)
+        self._sending = False
+        self.send_btn.config(text='发  送 ▶', fg='white')
         self.status_var.set(f'发送失败')
         messagebox.showerror('发送失败',
                              f'邮件发送失败，请检查网络和授权码。\n\n错误信息：{err_msg}',

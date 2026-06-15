@@ -13,6 +13,7 @@ from utils.theme import (
     SELECT_BG, SELECT_FG, UNREAD_DOT,
     BODY, HEADING, SMALL, TINY, FAMILY,
     PAD_XS, PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+    make_button,
 )
 
 
@@ -27,6 +28,7 @@ class MainWindow:
         self.mails = []
         self.current_folder = 'inbox'
         self._anim_id = None
+        self._fetching = False
 
         self.root.title(f'邮件客户端 — {account["email"]}')
         self.root.geometry('960x640')
@@ -51,31 +53,21 @@ class MainWindow:
         toolbar.pack(fill=tk.X)
         toolbar.pack_propagate(False)
 
-        btn_cfg = dict(
-            font=SMALL,
-            bg='#505050',
-            fg='white',
-            activebackground='#666666',
-            activeforeground='white',
-            relief='flat',
-            cursor='hand2',
-            padx=PAD_LG,
+        self.btn_compose = make_button(
+            toolbar, '✏ 写信', self._open_compose,
+            bg='#505050', hover_bg='#666666',
+            side=tk.LEFT, pady=PAD_SM, padx=(PAD_MD, PAD_SM),
         )
-
-        self.btn_compose = tk.Button(toolbar, text='✏ 写信',
-                                     command=self._open_compose, **btn_cfg)
-        self.btn_compose.pack(side=tk.LEFT, pady=PAD_SM, padx=(PAD_MD, PAD_SM))
-
-        self.btn_fetch = tk.Button(toolbar, text='⟳ 收信',
-                                   command=self._fetch_mails, **btn_cfg)
-        self.btn_fetch.pack(side=tk.LEFT, pady=PAD_SM, padx=PAD_SM)
-
-        self.btn_delete = tk.Button(toolbar, text='🗑 删除',
-                                    command=self._delete_selected, **btn_cfg)
-        self.btn_delete.pack(side=tk.LEFT, pady=PAD_SM, padx=PAD_SM)
-
-        for btn in (self.btn_compose, self.btn_fetch, self.btn_delete):
-            self._bind_hover(btn, '#505050', '#666666')
+        self.btn_fetch = make_button(
+            toolbar, '⟳ 收信', self._fetch_mails,
+            bg='#505050', hover_bg='#666666',
+            side=tk.LEFT, pady=PAD_SM, padx=PAD_SM,
+        )
+        self.btn_delete = make_button(
+            toolbar, '🗑 删除', self._delete_selected,
+            bg='#505050', hover_bg='#666666',
+            side=tk.LEFT, pady=PAD_SM, padx=PAD_SM,
+        )
 
         tk.Label(
             toolbar,
@@ -145,22 +137,12 @@ class MainWindow:
         folders = [('inbox', '📥 收件箱'), ('sent', '📤 已发送')]
         self.folder_btns = {}
         for key, label in folders:
-            btn = tk.Button(
-                parent,
-                text=label,
-                anchor='w',
-                font=SMALL,
-                fg=TEXT,
-                bg=BG,
-                activebackground=HOVER,
-                relief='flat',
-                cursor='hand2',
-                padx=PAD_LG,
-                pady=PAD_SM,
-                command=lambda k=key: self._switch_folder(k),
+            btn = make_button(
+                parent, label, lambda k=key: self._switch_folder(k),
+                bg=BG, fg=TEXT, hover_bg=HOVER,
+                anchor='w', label_padx=PAD_LG, label_pady=PAD_SM,
+                fill=tk.X, pady=PAD_XS,
             )
-            btn.pack(fill=tk.X, pady=PAD_XS)
-            self._bind_hover(btn, BG, HOVER)
             self.folder_btns[key] = btn
 
         self._highlight_folder('inbox')
@@ -478,7 +460,10 @@ class MainWindow:
 
     def _fetch_mails(self):
         """后台线程收取新邮件"""
-        self.btn_fetch.config(state=tk.DISABLED)
+        if self._fetching:
+            return
+        self._fetching = True
+        self.btn_fetch.config(fg=TEXT_MUTED)
         self._start_dots_animation(self.btn_fetch, '收信', '⟳ 收信')
         threading.Thread(target=self._do_fetch, daemon=True).start()
 
@@ -503,14 +488,16 @@ class MainWindow:
 
     def _fetch_done(self, new_count):
         self._stop_dots_animation(self.btn_fetch, '收信')
-        self.btn_fetch.config(state=tk.NORMAL)
+        self._fetching = False
+        self.btn_fetch.config(fg='white')
         self._set_status(f'✓ 收信完成，新邮件 {new_count} 封')
         if self.current_folder == 'inbox':
             self._load_mails_from_db()
 
     def _fetch_failed(self, err_msg):
         self._stop_dots_animation(self.btn_fetch, '收信')
-        self.btn_fetch.config(state=tk.NORMAL)
+        self._fetching = False
+        self.btn_fetch.config(fg='white')
         self._set_status(f'✗ 收信失败: {err_msg}')
 
     def _start_dots_animation(self, btn, base_text, prefix=''):

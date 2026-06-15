@@ -13,6 +13,7 @@ from utils.theme import (
     ERROR, HOVER, HEADER_HOVER, DIVIDER,
     BODY, SMALL, TINY, FAMILY,
     PAD_SM, PAD_MD, PAD_LG, PAD_XL,
+    make_button,
 )
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
@@ -114,16 +115,12 @@ class LoginWindow:
                            anchor='w')
 
         # 登录按钮
-        self.login_btn = tk.Button(
-            form, text='登  录',
-            font=(FAMILY, 12, 'bold'),
-            bg=ACCENT, fg='white',
-            activebackground=ACCENT_HOVER, activeforeground='white',
-            relief='flat', cursor='hand2',
-            command=self._on_login
+        self.login_btn = make_button(
+            form, text='登  录', command=self._on_login,
+            bg=ACCENT, fg='white', hover_bg=ACCENT_HOVER,
+            font=(FAMILY, 12, 'bold'), label_padx=PAD_XL, label_pady=PAD_MD,
+            fill=tk.X, pady=(PAD_XL, 0),
         )
-        self.login_btn.pack(fill=tk.X, ipady=10, pady=(PAD_XL, 0))
-        self._bind_hover(self.login_btn, ACCENT, ACCENT_HOVER)
 
         # 状态提示
         self.status_var = tk.StringVar()

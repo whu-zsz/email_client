@@ -105,3 +105,37 @@ def setup_styles():
         font=BODY,
         padding=4,
     )
+
+
+def make_button(parent, text, command, bg, fg='white', hover_bg=None,
+                font=SMALL, label_padx=None, label_pady=None, anchor='center',
+                cursor='hand2', **pack_kw):
+    """
+    用 tk.Label 伪装按钮（macOS 上 tk.Button 的 bg 无法生效）
+    自动绑定 hover 变色和点击事件
+    """
+    if label_padx is None:
+        label_padx = PAD_LG
+    if label_pady is None:
+        label_pady = PAD_SM
+    lbl = tk.Label(parent, text=text, font=font, fg=fg, bg=bg,
+                   padx=label_padx, pady=label_pady, anchor=anchor, cursor=cursor)
+    lbl._normal_bg = bg
+    lbl._hover_bg = hover_bg or bg
+    lbl._command = command
+
+    def on_enter(e):
+        lbl.config(bg=lbl._hover_bg)
+    def on_leave(e):
+        lbl.config(bg=lbl._normal_bg)
+    def on_click(e):
+        if lbl._command:
+            lbl._command()
+
+    lbl.bind('<Enter>', on_enter)
+    lbl.bind('<Leave>', on_leave)
+    lbl.bind('<Button-1>', on_click)
+
+    if pack_kw:
+        lbl.pack(**pack_kw)
+    return lbl

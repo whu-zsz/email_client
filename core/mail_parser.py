@@ -14,7 +14,7 @@ from utils.logger import logger
 
 INLINE_DISPOSITION = 'inline'
 ATTACHMENT_DISPOSITION = 'attachment'
-CHARSET_FALLBACKS = ('utf-8', 'gb18030', 'gbk', 'gb2312', 'big5', 'latin-1')
+CHARSET_FALLBACKS = ('utf-8', 'gb18030', 'gbk', 'gb2312', 'big5')
 
 
 def _decode_bytes(data: bytes, charsets) -> str:
@@ -71,20 +71,7 @@ def _decode_part(part) -> str:
     if raw_bytes is None:
         return ''
     charset = part.get_content_charset()
-<<<<<<< HEAD
     return _decode_bytes(raw_bytes, [charset])
-=======
-    # gb18030 是 GBK/GB2312 的超集，放在最后能覆盖几乎所有中文编码
-    # 不含 latin-1：它对任意字节都能"成功"但会产生乱码
-    for enc in [charset, 'utf-8', 'gbk', 'gb18030', 'gb2312']:
-        if not enc:
-            continue
-        try:
-            return raw_bytes.decode(enc, errors='strict')
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return raw_bytes.decode('utf-8', errors='replace')
->>>>>>> 84ab7d4b70b5e4b101b6846d34363829916940ed
 
 
 
@@ -166,18 +153,7 @@ def _extract_bodies(msg) -> tuple:
         payload = msg.get_payload(decode=True)
         decoded = ''
         if payload:
-<<<<<<< HEAD
             decoded = _decode_bytes(payload, [msg.get_content_charset()])
-=======
-            for enc in ['utf-8', 'gbk', 'gb18030', 'gb2312']:
-                try:
-                    decoded = payload.decode(enc, errors='strict')
-                    break
-                except UnicodeDecodeError:
-                    continue
-            if not decoded:
-                decoded = payload.decode('utf-8', errors='replace')
->>>>>>> 84ab7d4b70b5e4b101b6846d34363829916940ed
         else:
             raw = msg.get_payload()
             if isinstance(raw, str):
@@ -261,7 +237,6 @@ def _preprocess_raw_text(raw_text: str) -> str:
     generic_hdr = re.compile(r'^[A-Za-z][\w\-]*\s*:\s*.*$', re.ASCII)
     lines = raw_text.replace('\r\n', '\n').split('\n')
 
-<<<<<<< HEAD
     def is_continuation_candidate(prev_line: str, line: str) -> bool:
         stripped = line.strip()
         if not stripped:
@@ -327,10 +302,6 @@ def _preprocess_raw_text(raw_text: str) -> str:
             best_score = score
 
     if best_idx is None:
-=======
-    anchor_idx = next((i for i, line in enumerate(lines) if anchor_hdr.match(line)), None)
-    if anchor_idx is None or anchor_idx <= 0:
->>>>>>> 84ab7d4b70b5e4b101b6846d34363829916940ed
         return '\n'.join(lines)
 
     normalized_lines = lines[:]
